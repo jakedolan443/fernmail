@@ -5,6 +5,8 @@ Branch: `codex/auth-portal-hardening`.
 
 This is an upstream PR proposal covering the staff authentication portal. It contains no application changes. The proposed scope is TOTP and optional successful-login alerts, with the supporting controls needed to make them safe. Customer/widget authentication is a separate system.
 
+Scope update: the current PR is **TOTP only**. The [TOTP implementation plan](totp-implementation-plan.md) supersedes the implementation sequence below. Login alerts and broader authentication hardening remain discovery notes for future work.
+
 **The System account and alert addresses**
 
 LibreDesk has a built-in agent whose login identifier is literally `System`, created with the Admin role. Its `email` value is not a deliverable address. Ordinary agents can also have the Admin role. See [account identity](../internal/user/models/models.go), [system account creation](../internal/user/user.go), and the explicit System exception in [login validation](../frontend/apps/main/src/views/auth/UserLoginView.vue).
