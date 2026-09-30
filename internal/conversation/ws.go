@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"time"
 
-	cmodels "github.com/abhinavxd/libredesk/internal/conversation/models"
+	cmodels "github.com/jakedolan443/fernmail/internal/conversation/models"
 
-	wsmodels "github.com/abhinavxd/libredesk/internal/ws/models"
+	wsmodels "github.com/jakedolan443/fernmail/internal/ws/models"
 )
 
 // broadcastConv shadows the per-user fields (another agent's unread state) out of the shared payload.

@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"strconv"
 
-	amodels "github.com/abhinavxd/libredesk/internal/auth/models"
-	"github.com/abhinavxd/libredesk/internal/conversation"
-	"github.com/abhinavxd/libredesk/internal/dbutil"
-	"github.com/abhinavxd/libredesk/internal/envelope"
-	"github.com/abhinavxd/libredesk/internal/inbox"
-	wsmodels "github.com/abhinavxd/libredesk/internal/ws/models"
+	amodels "github.com/jakedolan443/fernmail/internal/auth/models"
+	"github.com/jakedolan443/fernmail/internal/conversation"
+	"github.com/jakedolan443/fernmail/internal/dbutil"
+	"github.com/jakedolan443/fernmail/internal/envelope"
+	"github.com/jakedolan443/fernmail/internal/inbox"
+	wsmodels "github.com/jakedolan443/fernmail/internal/ws/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )

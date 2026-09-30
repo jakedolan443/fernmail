@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abhinavxd/libredesk/internal/attachment"
-	"github.com/abhinavxd/libredesk/internal/conversation/models"
-	imodels "github.com/abhinavxd/libredesk/internal/inbox/models"
-	"github.com/abhinavxd/libredesk/internal/stringutil"
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
+	"github.com/jakedolan443/fernmail/internal/attachment"
+	"github.com/jakedolan443/fernmail/internal/conversation/models"
+	imodels "github.com/jakedolan443/fernmail/internal/inbox/models"
+	"github.com/jakedolan443/fernmail/internal/stringutil"
 	"github.com/jhillyerd/enmime/v2"
 	"github.com/volatiletech/null/v9"
 )

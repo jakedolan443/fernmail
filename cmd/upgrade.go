@@ -9,8 +9,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/abhinavxd/libredesk/internal/dbutil"
-	"github.com/abhinavxd/libredesk/internal/migrations"
+	"github.com/jakedolan443/fernmail/internal/dbutil"
+	"github.com/jakedolan443/fernmail/internal/migrations"
 	"github.com/jmoiron/sqlx"
 	"github.com/knadh/koanf/v2"
 	"github.com/knadh/stuffbin"
@@ -169,6 +169,6 @@ func checkPendingUpgrade(db *sqlx.DB) {
 		vers = append(vers, m.version)
 	}
 
-	log.Fatalf(`there are %d pending database upgrade(s): %v. The last upgrade was %s. Backup the database and run libredesk --upgrade`,
+	log.Fatalf(`there are %d pending database upgrade(s): %v. The last upgrade was %s. Backup the database and run fernmail --upgrade`,
 		len(toRun), vers, lastVer)
 }

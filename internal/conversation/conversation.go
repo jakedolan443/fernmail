@@ -18,25 +18,25 @@ import (
 	"sync"
 	"time"
 
-	"github.com/abhinavxd/libredesk/internal/authz"
-	authzmodels "github.com/abhinavxd/libredesk/internal/authz/models"
+	"github.com/jakedolan443/fernmail/internal/authz"
+	authzmodels "github.com/jakedolan443/fernmail/internal/authz/models"
 
-	"github.com/abhinavxd/libredesk/internal/conversation/models"
+	"github.com/jakedolan443/fernmail/internal/conversation/models"
 
-	smodels "github.com/abhinavxd/libredesk/internal/conversation/status/models"
+	smodels "github.com/jakedolan443/fernmail/internal/conversation/status/models"
 
-	"github.com/abhinavxd/libredesk/internal/dbutil"
-	"github.com/abhinavxd/libredesk/internal/envelope"
-	"github.com/abhinavxd/libredesk/internal/inbox"
-	imodels "github.com/abhinavxd/libredesk/internal/inbox/models"
-	mmodels "github.com/abhinavxd/libredesk/internal/media/models"
+	"github.com/jakedolan443/fernmail/internal/dbutil"
+	"github.com/jakedolan443/fernmail/internal/envelope"
+	"github.com/jakedolan443/fernmail/internal/inbox"
+	imodels "github.com/jakedolan443/fernmail/internal/inbox/models"
+	mmodels "github.com/jakedolan443/fernmail/internal/media/models"
 
-	"github.com/abhinavxd/libredesk/internal/stringutil"
+	"github.com/jakedolan443/fernmail/internal/stringutil"
 
-	"github.com/abhinavxd/libredesk/internal/template"
-	umodels "github.com/abhinavxd/libredesk/internal/user/models"
-	wmodels "github.com/abhinavxd/libredesk/internal/webhook/models"
-	"github.com/abhinavxd/libredesk/internal/ws"
+	"github.com/jakedolan443/fernmail/internal/template"
+	umodels "github.com/jakedolan443/fernmail/internal/user/models"
+	wmodels "github.com/jakedolan443/fernmail/internal/webhook/models"
+	"github.com/jakedolan443/fernmail/internal/ws"
 	"github.com/jmoiron/sqlx"
 	"github.com/jmoiron/sqlx/types"
 

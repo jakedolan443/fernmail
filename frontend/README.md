@@ -36,7 +36,7 @@ The preview never sends mail or connects to a backend and is excluded from the p
 Browser notifications are opt-in per account and browser. Use the bell beside the
 account name to enable or disable them. They require HTTPS (localhost also works),
 a supported desktop browser, and an open Libredesk tab. They use live mailbox events,
-so they do not run after all Libredesk tabs are closed. Outgoing mail, internal notes,
+so they do not run after all Fernmail tabs are closed. Outgoing mail, internal notes,
 and activity updates do not generate notifications.
 
 The green favicon is the default; a custom favicon URL still takes precedence.

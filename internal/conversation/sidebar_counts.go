@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	authzModels "github.com/abhinavxd/libredesk/internal/authz/models"
-	"github.com/abhinavxd/libredesk/internal/conversation/models"
-	"github.com/abhinavxd/libredesk/internal/dbutil"
-	"github.com/abhinavxd/libredesk/internal/envelope"
-	vmodels "github.com/abhinavxd/libredesk/internal/view/models"
+	authzModels "github.com/jakedolan443/fernmail/internal/authz/models"
+	"github.com/jakedolan443/fernmail/internal/conversation/models"
+	"github.com/jakedolan443/fernmail/internal/dbutil"
+	"github.com/jakedolan443/fernmail/internal/envelope"
+	vmodels "github.com/jakedolan443/fernmail/internal/view/models"
 )
 
 const sidebarCountsViewBatchSize = 50

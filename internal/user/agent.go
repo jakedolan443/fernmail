@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abhinavxd/libredesk/internal/dbutil"
-	"github.com/abhinavxd/libredesk/internal/envelope"
-	"github.com/abhinavxd/libredesk/internal/user/models"
+	"github.com/jakedolan443/fernmail/internal/dbutil"
+	"github.com/jakedolan443/fernmail/internal/envelope"
+	"github.com/jakedolan443/fernmail/internal/user/models"
 	"github.com/lib/pq"
 	"github.com/volatiletech/null/v9"
 	"golang.org/x/crypto/bcrypt"

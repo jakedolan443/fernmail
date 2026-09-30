@@ -4,13 +4,13 @@ import (
 	"strconv"
 	"strings"
 
-	accountmail "github.com/abhinavxd/libredesk/internal/accountmail"
-	amodels "github.com/abhinavxd/libredesk/internal/auth/models"
-	"github.com/abhinavxd/libredesk/internal/envelope"
+	accountmail "github.com/jakedolan443/fernmail/internal/accountmail"
+	amodels "github.com/jakedolan443/fernmail/internal/auth/models"
+	"github.com/jakedolan443/fernmail/internal/envelope"
 
-	"github.com/abhinavxd/libredesk/internal/stringutil"
-	tmpl "github.com/abhinavxd/libredesk/internal/template"
-	"github.com/abhinavxd/libredesk/internal/user/models"
+	"github.com/jakedolan443/fernmail/internal/stringutil"
+	tmpl "github.com/jakedolan443/fernmail/internal/template"
+	"github.com/jakedolan443/fernmail/internal/user/models"
 
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"

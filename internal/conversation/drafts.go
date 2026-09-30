@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abhinavxd/libredesk/internal/conversation/models"
-	"github.com/abhinavxd/libredesk/internal/envelope"
+	"github.com/jakedolan443/fernmail/internal/conversation/models"
+	"github.com/jakedolan443/fernmail/internal/envelope"
 )
 
 func (m *Manager) UpsertConversationDraft(conversationID, userID int, draftType, content string, meta json.RawMessage) (models.ConversationDraft, error) {

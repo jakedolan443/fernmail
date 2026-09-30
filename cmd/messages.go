@@ -4,11 +4,11 @@ import (
 	"slices"
 	"strings"
 
-	amodels "github.com/abhinavxd/libredesk/internal/auth/models"
-	authzModels "github.com/abhinavxd/libredesk/internal/authz/models"
-	cmodels "github.com/abhinavxd/libredesk/internal/conversation/models"
-	"github.com/abhinavxd/libredesk/internal/envelope"
-	umodels "github.com/abhinavxd/libredesk/internal/user/models"
+	amodels "github.com/jakedolan443/fernmail/internal/auth/models"
+	authzModels "github.com/jakedolan443/fernmail/internal/authz/models"
+	cmodels "github.com/jakedolan443/fernmail/internal/conversation/models"
+	"github.com/jakedolan443/fernmail/internal/envelope"
+	umodels "github.com/jakedolan443/fernmail/internal/user/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )

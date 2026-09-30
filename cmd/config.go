@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 
-	"github.com/abhinavxd/libredesk/internal/envelope"
-	oidcmodels "github.com/abhinavxd/libredesk/internal/oidc/models"
+	"github.com/jakedolan443/fernmail/internal/envelope"
+	oidcmodels "github.com/jakedolan443/fernmail/internal/oidc/models"
 	"github.com/zerodha/fastglue"
 )
 

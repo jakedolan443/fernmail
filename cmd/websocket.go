@@ -6,10 +6,10 @@ import (
 	"strings"
 	"sync"
 
-	amodels "github.com/abhinavxd/libredesk/internal/auth/models"
-	"github.com/abhinavxd/libredesk/internal/ws"
-	wsmodels "github.com/abhinavxd/libredesk/internal/ws/models"
 	"github.com/fasthttp/websocket"
+	amodels "github.com/jakedolan443/fernmail/internal/auth/models"
+	"github.com/jakedolan443/fernmail/internal/ws"
+	wsmodels "github.com/jakedolan443/fernmail/internal/ws/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )

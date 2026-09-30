@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	authzModels "github.com/abhinavxd/libredesk/internal/authz/models"
-	"github.com/abhinavxd/libredesk/internal/conversation/models"
-	"github.com/abhinavxd/libredesk/internal/dbutil"
-	"github.com/abhinavxd/libredesk/internal/testutil"
-	vmodels "github.com/abhinavxd/libredesk/internal/view/models"
+	authzModels "github.com/jakedolan443/fernmail/internal/authz/models"
+	"github.com/jakedolan443/fernmail/internal/conversation/models"
+	"github.com/jakedolan443/fernmail/internal/dbutil"
+	"github.com/jakedolan443/fernmail/internal/testutil"
+	vmodels "github.com/jakedolan443/fernmail/internal/view/models"
 	"github.com/jmoiron/sqlx/types"
 )
 

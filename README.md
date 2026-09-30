@@ -8,7 +8,7 @@ Email runs over IMAP and SMTP, including Google/Microsoft OAuth. This is a conve
 
 Unread mail has a green edge and contributes to the browser tab count. Optional browser notifications show the sender and a message preview while Fernmail is open.
 
-The existing binary name, `LIBREDESK_` configuration variables, Go module, and container image paths remain compatible with earlier installations. Custom site names and favicons are preserved when upgrading.
+The new binary, module, and container image are named Fernmail. Existing `LIBREDESK_` configuration variables, database identifiers, and container names remain compatible with earlier installations. Custom site names and favicons are preserved when upgrading.
 
 See [the mail-only upgrade notes](docs/mail-only.md) before upgrading an existing database.
 
@@ -16,12 +16,12 @@ See [the mail-only upgrade notes](docs/mail-only.md) before upgrading an existin
 
 ### Docker
 
-The latest image is available in GitHub Container Registry at [`ghcr.io/jakedolan443/libredesk-hardened:latest`](https://github.com/jakedolan443/libredesk-hardened/pkgs/container/libredesk-hardened).
+The latest image is available in GitHub Container Registry at [`ghcr.io/jakedolan443/fernmail:latest`](https://github.com/jakedolan443/fernmail/pkgs/container/fernmail).
 
 ```shell
 # Download the compose file and sample config file in the current directory.
-curl -LO https://github.com/jakedolan443/libredesk-hardened/raw/main/docker-compose.yml
-curl -LO https://github.com/jakedolan443/libredesk-hardened/raw/main/config.sample.toml
+curl -LO https://github.com/jakedolan443/fernmail/raw/main/docker-compose.yml
+curl -LO https://github.com/jakedolan443/fernmail/raw/main/config.sample.toml
 
 # Copy the config.sample.toml to config.toml and edit it as needed.
 cp config.sample.toml config.toml
@@ -30,7 +30,7 @@ cp config.sample.toml config.toml
 docker compose up -d
 
 # Setting System user password.
-docker exec -it libredesk_app ./libredesk --set-system-user-password
+docker exec -it libredesk_app ./fernmail --set-system-user-password
 ```
 
 Go to `http://localhost:9000` and login with username `System` and the password you set using the `--set-system-user-password` command.
@@ -40,11 +40,11 @@ See [installation docs](https://docs.libredesk.io/getting-started/installation)
 __________________
 
 ### Binary
-- Download the [latest release](https://github.com/jakedolan443/libredesk-hardened/releases) and extract the libredesk binary.
+- Download the [latest release](https://github.com/jakedolan443/fernmail/releases) and extract the `fernmail` binary.
 - Edit config.toml as needed.
-- `./libredesk --install` to setup the Postgres DB.
-- Run `./libredesk --set-system-user-password` to set the password for the System user.
-- Run `./libredesk` and visit `http://localhost:9000` and login with email `System` and the password you set using the --set-system-user-password command.
+- `./fernmail --install` to setup the Postgres DB.
+- Run `./fernmail --set-system-user-password` to set the password for the System user.
+- Run `./fernmail` and visit `http://localhost:9000` and login with email `System` and the password you set using the --set-system-user-password command.
 
 See [installation docs](https://docs.libredesk.io/getting-started/installation)
 __________________

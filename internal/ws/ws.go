@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/abhinavxd/libredesk/internal/ws/models"
 	"github.com/fasthttp/websocket"
+	"github.com/jakedolan443/fernmail/internal/ws/models"
 	"github.com/zerodha/logf"
 )
 

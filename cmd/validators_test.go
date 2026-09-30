@@ -6,13 +6,13 @@ import (
 
 	"testing"
 
-	"github.com/abhinavxd/libredesk/internal/envelope"
+	"github.com/jakedolan443/fernmail/internal/envelope"
 
-	imodels "github.com/abhinavxd/libredesk/internal/inbox/models"
+	imodels "github.com/jakedolan443/fernmail/internal/inbox/models"
 
-	"github.com/abhinavxd/libredesk/internal/testutil"
-	umodels "github.com/abhinavxd/libredesk/internal/user/models"
-	wmodels "github.com/abhinavxd/libredesk/internal/webhook/models"
+	"github.com/jakedolan443/fernmail/internal/testutil"
+	umodels "github.com/jakedolan443/fernmail/internal/user/models"
+	wmodels "github.com/jakedolan443/fernmail/internal/webhook/models"
 	"github.com/zerodha/logf"
 )
 

@@ -15,19 +15,19 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/abhinavxd/libredesk/internal/attachment"
+	"github.com/jakedolan443/fernmail/internal/attachment"
 
-	"github.com/abhinavxd/libredesk/internal/conversation/models"
-	"github.com/abhinavxd/libredesk/internal/envelope"
-	"github.com/abhinavxd/libredesk/internal/image"
-	"github.com/abhinavxd/libredesk/internal/inbox"
+	"github.com/jakedolan443/fernmail/internal/conversation/models"
+	"github.com/jakedolan443/fernmail/internal/envelope"
+	"github.com/jakedolan443/fernmail/internal/image"
+	"github.com/jakedolan443/fernmail/internal/inbox"
 
-	mmodels "github.com/abhinavxd/libredesk/internal/media/models"
+	mmodels "github.com/jakedolan443/fernmail/internal/media/models"
 
-	"github.com/abhinavxd/libredesk/internal/stringutil"
-	umodels "github.com/abhinavxd/libredesk/internal/user/models"
-	wmodels "github.com/abhinavxd/libredesk/internal/webhook/models"
 	"github.com/google/uuid"
+	"github.com/jakedolan443/fernmail/internal/stringutil"
+	umodels "github.com/jakedolan443/fernmail/internal/user/models"
+	wmodels "github.com/jakedolan443/fernmail/internal/webhook/models"
 	"github.com/lib/pq"
 	"github.com/volatiletech/null/v9"
 )

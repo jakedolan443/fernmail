@@ -1,4 +1,4 @@
-# Libredesk Design System
+# Fernmail Design System
 
 Reference for colors, typography, spacing, radius, elevation, and component conventions
 across both apps (agent dashboard + livechat widget).

@@ -3,7 +3,7 @@ package migrations
 import (
 	"testing"
 
-	"github.com/abhinavxd/libredesk/internal/testutil"
+	"github.com/jakedolan443/fernmail/internal/testutil"
 )
 
 func TestFernmailBrandingPreservesCustomSettings(t *testing.T) {

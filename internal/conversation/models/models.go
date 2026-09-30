@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/abhinavxd/libredesk/internal/attachment"
-	mmodels "github.com/abhinavxd/libredesk/internal/media/models"
-	"github.com/abhinavxd/libredesk/internal/resourcepolicy"
+	"github.com/jakedolan443/fernmail/internal/attachment"
+	mmodels "github.com/jakedolan443/fernmail/internal/media/models"
+	"github.com/jakedolan443/fernmail/internal/resourcepolicy"
 
 	"github.com/lib/pq"
 	"github.com/volatiletech/null/v9"

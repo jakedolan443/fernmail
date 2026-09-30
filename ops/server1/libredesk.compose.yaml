@@ -2,7 +2,7 @@ name: libredesk
 
 services:
   app:
-    image: ghcr.io/jakedolan443/libredesk-hardened:latest
+    image: ghcr.io/jakedolan443/fernmail:latest
     container_name: libredesk_app
     restart: unless-stopped
     init: true
@@ -11,9 +11,9 @@ services:
     ports:
       - "127.0.0.1:9000:9000"
     volumes:
-      - ./uploads:/libredesk/uploads:rw
-      - ./config.toml:/libredesk/config.toml:ro
-    command: ["sh", "-c", "./libredesk --install --idempotent-install --yes --config /libredesk/config.toml && ./libredesk --upgrade --yes --config /libredesk/config.toml && ./libredesk --config /libredesk/config.toml"]
+      - ./uploads:/fernmail/uploads:rw
+      - ./config.toml:/fernmail/config.toml:ro
+    command: ["sh", "-c", "./fernmail --install --idempotent-install --yes --config /fernmail/config.toml && ./fernmail --upgrade --yes --config /fernmail/config.toml && ./fernmail --config /fernmail/config.toml"]
     depends_on:
       db:
         condition: service_healthy

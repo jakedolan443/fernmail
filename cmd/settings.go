@@ -5,10 +5,10 @@ import (
 
 	"strings"
 
-	"github.com/abhinavxd/libredesk/internal/envelope"
-	"github.com/abhinavxd/libredesk/internal/httputil"
-	"github.com/abhinavxd/libredesk/internal/setting/models"
-	"github.com/abhinavxd/libredesk/internal/stringutil"
+	"github.com/jakedolan443/fernmail/internal/envelope"
+	"github.com/jakedolan443/fernmail/internal/httputil"
+	"github.com/jakedolan443/fernmail/internal/setting/models"
+	"github.com/jakedolan443/fernmail/internal/stringutil"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )

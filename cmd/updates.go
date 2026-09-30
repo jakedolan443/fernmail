@@ -1,6 +1,6 @@
 // Copyright Kailash Nadh (https://github.com/knadh/listmonk)
 // SPDX-License-Identifier: AGPL-3.0
-// Adapted from listmonk for Libredesk.
+// Adapted from listmonk for Fernmail.
 
 package main
 

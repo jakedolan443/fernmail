@@ -100,7 +100,7 @@ webauthn:
     discoverability: 'preferred'
     user_verification: 'required'
 
-# LibreDesk uses Authelia as its OpenID Connect provider. The signing key,
+# Fernmail uses Authelia as its OpenID Connect provider. The signing key,
 # HMAC secret, and client-secret digest are read from a root-protected,
 # read-only secret mount rather than stored in this file.
 identity_providers:
@@ -110,7 +110,7 @@ identity_providers:
       - key: {{ secret "/config/secrets/oidc/jwks/rsa.2048.key" | mindent 10 "|" | msquote }}
         algorithm: 'RS256'
         use: 'sig'
-    # LibreDesk currently reads the user identity directly from the ID token
+    # Fernmail currently reads the user identity directly from the ID token
     # rather than the OIDC UserInfo endpoint. Limit the extra claims to the
     # minimum identity fields it needs, and apply them only to this client.
     claims_policies:
@@ -120,10 +120,10 @@ identity_providers:
           - 'email_verified'
     clients:
       - client_id: 'libredesk'
-        client_name: 'Antimuon Studios LibreDesk'
+        client_name: 'Antimuon Studios Fernmail'
         client_secret: {{ secret "/config/secrets/oidc/libredesk_client_secret.hash" | msquote }}
         public: false
-        # LibreDesk's OIDC client uses HTTP Basic authentication at the token endpoint.
+        # Fernmail's OIDC client uses HTTP Basic authentication at the token endpoint.
         token_endpoint_auth_method: 'client_secret_basic'
         redirect_uris:
           - 'https://desk.antimuonstudios.com/api/v1/oidc/1/finish'

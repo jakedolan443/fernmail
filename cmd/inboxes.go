@@ -7,12 +7,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/abhinavxd/libredesk/internal/envelope"
+	"github.com/jakedolan443/fernmail/internal/envelope"
 
-	"github.com/abhinavxd/libredesk/internal/inbox"
-	"github.com/abhinavxd/libredesk/internal/inbox/channel/email/oauth"
+	"github.com/jakedolan443/fernmail/internal/inbox"
+	"github.com/jakedolan443/fernmail/internal/inbox/channel/email/oauth"
 
-	imodels "github.com/abhinavxd/libredesk/internal/inbox/models"
+	imodels "github.com/jakedolan443/fernmail/internal/inbox/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )

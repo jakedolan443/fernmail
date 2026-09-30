@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/abhinavxd/libredesk/internal/envelope"
-	"github.com/abhinavxd/libredesk/internal/ws"
+	"github.com/jakedolan443/fernmail/internal/envelope"
+	"github.com/jakedolan443/fernmail/internal/ws"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )

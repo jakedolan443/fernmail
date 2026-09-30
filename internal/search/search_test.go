@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abhinavxd/libredesk/internal/search/models"
-	"github.com/abhinavxd/libredesk/internal/testutil"
+	"github.com/jakedolan443/fernmail/internal/search/models"
+	"github.com/jakedolan443/fernmail/internal/testutil"
 	"github.com/jmoiron/sqlx"
 	"github.com/zerodha/logf"
 )

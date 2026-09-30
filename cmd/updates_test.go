@@ -10,7 +10,7 @@ const updatesPayload = `{
     "update": {
         "release_version": "v2.7.1",
         "release_date": "2026-08-12",
-        "url": "https://github.com/abhinavxd/libredesk/releases/tag/v2.7.1",
+        "url": "https://github.com/jakedolan443/fernmail/releases/tag/v2.7.1",
         "description": "Bug fixes and improvements."
     },
     "messages": []
@@ -32,7 +32,7 @@ func TestFetchAppUpdateSuccess(t *testing.T) {
 	if out.Update.ReleaseDate != "2026-08-12" {
 		t.Fatalf("got release date %q, want 2026-08-12", out.Update.ReleaseDate)
 	}
-	if out.Update.URL != "https://github.com/abhinavxd/libredesk/releases/tag/v2.7.1" {
+	if out.Update.URL != "https://github.com/jakedolan443/fernmail/releases/tag/v2.7.1" {
 		t.Fatalf("got url %q", out.Update.URL)
 	}
 	if out.Update.Description != "Bug fixes and improvements." {

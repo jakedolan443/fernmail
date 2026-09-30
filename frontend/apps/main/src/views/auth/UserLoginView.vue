@@ -152,8 +152,8 @@ const appSettingsStore = useAppSettingsStore()
 const isDemoBuild = import.meta.env.VITE_DEMO_BUILD === 'true'
 
 const demoCredentials = {
-  email: 'demo@libredesk.io',
-  password: 'demo@libredesk.io'
+  email: 'demo@fernmail.local',
+  password: 'demo@fernmail.local'
 }
 
 const oidcErrorKeys = {
