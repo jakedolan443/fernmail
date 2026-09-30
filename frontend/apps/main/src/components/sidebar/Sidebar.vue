@@ -22,7 +22,7 @@ import {
   SidebarProvider
 } from '@shared-ui/components/ui/sidebar'
 import { useAppSettingsStore } from '@main/stores/appSettings'
-import { ChevronRight, EllipsisVertical, Search, Plus, List, AtSign } from 'lucide-vue-next'
+import { ChevronRight, EllipsisVertical, Search, Plus, List, Mail } from 'lucide-vue-next'
 
 import {
   DropdownMenu,
@@ -43,12 +43,14 @@ import {
 
 import MobileDrawerFooter from './MobileDrawerFooter.vue'
 import SidebarCountBadge from './SidebarCountBadge.vue'
+import FernmailLogo from '@main/components/brand/FernmailLogo.vue'
 import { filterNavItems } from '@main/utils/nav-permissions'
 import { permissions } from '@main/constants/permissions'
 import { useStorage } from '@vueuse/core'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@main/stores/user'
+import { useInboxStore } from '@main/stores/inbox'
 import { useConversationStore } from '@main/stores/conversation'
 import { navIconMap } from '@main/constants/navIcons'
 import { useInboxNavigation } from '@main/composables/useInboxNavigation'
@@ -60,6 +62,7 @@ defineProps({
 })
 const userStore = useUserStore()
 const conversationStore = useConversationStore()
+const inboxStore = useInboxStore()
 const settingsStore = useAppSettingsStore()
 const route = useRoute()
 const { t } = useI18n()
@@ -94,7 +97,7 @@ const handleDeleteView = () => {
   }
 }
 
-const { navigateToInbox, navigateToViewInbox } = useInboxNavigation()
+const { navigateToInbox, navigateToViewInbox, navigateToMailbox } = useInboxNavigation()
 
 const filteredAdminNavItems = computed(() => filterNavItems(adminNavItems, userStore.can))
 
@@ -121,6 +124,7 @@ watch(
 // Sidebar open state in local storage
 const sidebarOpen = useStorage('mainSidebarOpen', true)
 
+const mailboxSectionOpen = useStorage('mailboxSectionOpen', true)
 const viewInboxOpen = useStorage('viewInboxOpen', true)
 const sharedViewInboxOpen = useStorage('sharedViewInboxOpen', true)
 
@@ -154,7 +158,10 @@ onMounted(() => {
                   {{ t('globals.terms.admin') }}
                 </span>
                 <!-- App version -->
-                <div v-if="settingsStore.settings['app.version']" class="text-xs text-muted-foreground">
+                <div
+                  v-if="settingsStore.settings['app.version']"
+                  class="text-xs text-muted-foreground"
+                >
                   {{ settingsStore.settings['app.version'] }}
                 </div>
               </div>
@@ -227,7 +234,7 @@ onMounted(() => {
             <SidebarMenuItem>
               <div class="flex items-center justify-between w-full px-1">
                 <div class="font-semibold text-xl">
-                  <span>{{ t('globals.terms.inbox') }}</span>
+                  <FernmailLogo :name="settingsStore.settings['app.site_name'] || 'Fernmail'" />
                 </div>
                 <div class="mr-1 mt-1 transition-colors">
                   <router-link :to="{ name: 'search' }">
@@ -253,46 +260,64 @@ onMounted(() => {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  :isActive="isActiveParent('/inboxes/mentioned')"
-                  @click="navigateToInbox('mentioned')"
-                >
-                  <AtSign />
-                  <span class="flex-1 truncate">
-                    {{ t('globals.terms.mention', 2) }}
-                  </span>
-                  <SidebarCountBadge
-                    :count="conversationStore.sidebarCounts.mentioned"
-                    :ariaLabel="
-                      t(
-                        'conversation.sidebarCounts.mentioned',
-                        conversationStore.sidebarCounts.mentioned
-                      )
-                    "
-                  />
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              <!-- Inboxes -->
+              <Collapsible class="group/collapsible" v-model:open="mailboxSectionOpen">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton class="!p-2">
+                      <span class="sidebar-section-label">{{ t('globals.terms.inbox', 1) }}</span>
+                      <ChevronRight
+                        class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
+                      />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuButton
+                          size="sm"
+                          :isActive="isActiveParent('/inboxes/all')"
+                          @click="navigateToInbox('all')"
+                        >
+                          <List />
+                          <span class="flex-1 truncate">
+                            {{ t('globals.messages.all') }}
+                          </span>
+                          <SidebarCountBadge
+                            :count="conversationStore.sidebarCounts.all"
+                            :ariaLabel="
+                              t(
+                                'conversation.sidebarCounts.all',
+                                conversationStore.sidebarCounts.all
+                              )
+                            "
+                          />
+                        </SidebarMenuButton>
+                      </SidebarMenuSubItem>
 
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  :isActive="isActiveParent('/inboxes/all')"
-                  @click="navigateToInbox('all')"
-                >
-                  <List />
-                  <span class="flex-1 truncate">
-                    {{ t('globals.messages.all') }}
-                  </span>
-                  <SidebarCountBadge
-                    :count="conversationStore.sidebarCounts.all"
-                    :ariaLabel="
-                      t('conversation.sidebarCounts.all', conversationStore.sidebarCounts.all)
-                    "
-                  />
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <!-- Team Inboxes -->
+                      <SidebarMenuSubItem v-for="mailbox in inboxStore.inboxes" :key="mailbox.id">
+                        <SidebarMenuButton
+                          size="sm"
+                          :isActive="String(route.params.inboxID) === String(mailbox.id)"
+                          :title="`${mailbox.name} · ${mailbox.from || ''}`"
+                          @click="navigateToMailbox(mailbox.id)"
+                        >
+                          <Mail />
+                          <span class="flex-1 truncate">{{ mailbox.from || mailbox.name }}</span>
+                          <SidebarCountBadge
+                            :count="conversationStore.sidebarCounts.inboxes?.[mailbox.id] || 0"
+                            :ariaLabel="
+                              t('inbox.access.openCount', {
+                                count: conversationStore.sidebarCounts.inboxes?.[mailbox.id] || 0
+                              })
+                            "
+                          />
+                        </SidebarMenuButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
 
               <!-- Views -->
               <Collapsible

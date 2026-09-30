@@ -1,6 +1,7 @@
 package conversation
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"testing"
@@ -8,9 +9,49 @@ import (
 	authzModels "github.com/abhinavxd/libredesk/internal/authz/models"
 	"github.com/abhinavxd/libredesk/internal/conversation/models"
 	"github.com/abhinavxd/libredesk/internal/dbutil"
+	"github.com/abhinavxd/libredesk/internal/testutil"
 	vmodels "github.com/abhinavxd/libredesk/internal/view/models"
 	"github.com/jmoiron/sqlx/types"
 )
+
+func TestUnreadMessageCountAcrossMailbox(t *testing.T) {
+	db := testutil.NewDB(t, "unread_mail_count")
+	db.MustExec(`
+		INSERT INTO users(type, email, first_name) VALUES
+		('agent', 'reader@example.test', 'Reader'),
+		('agent', 'other@example.test', 'Other'),
+		('contact', 'sender@example.test', 'Sender');
+		INSERT INTO inboxes(name, channel) VALUES ('Mail', 'email'), ('Historical chat', 'livechat');
+		INSERT INTO conversations(contact_id, inbox_id, status_id, assigned_user_id)
+		SELECT (SELECT id FROM users WHERE email='sender@example.test'), inboxes.id,
+		(SELECT id FROM conversation_statuses WHERE name='Closed'), users.id
+		FROM inboxes CROSS JOIN users WHERE users.type='agent';
+		INSERT INTO conversation_messages(conversation_id, sender_id, sender_type, type, status, created_at)
+		SELECT conversations.id, conversations.contact_id, 'contact', 'incoming', 'received', now() - interval '1 minute'
+		FROM conversations CROSS JOIN generate_series(1, 30);
+		INSERT INTO conversation_messages(conversation_id, sender_id, sender_type, type, status, meta)
+		SELECT id, contact_id, 'contact', 'incoming', 'received', '{"continuity_email":true}' FROM conversations;
+	`)
+	var userID int
+	if err := db.Get(&userID, `SELECT id FROM users WHERE email='reader@example.test'`); err != nil {
+		t.Fatal(err)
+	}
+	m := &Manager{db: db}
+	check := func(lists []string, want int) {
+		t.Helper()
+		got, err := m.getUnreadMessageCount(context.Background(), userID, nil, lists)
+		if err != nil || got != want {
+			t.Fatalf("count(%v) = %d, %v; want %d", lists, got, err, want)
+		}
+	}
+	check([]string{models.AllConversations}, 60) // Not capped by row badge or list page; includes closed mail.
+	check([]string{models.AssignedConversations}, 30)
+	check(nil, 0)
+	db.MustExec(`INSERT INTO conversation_last_seen(user_id, conversation_id, last_seen_at)
+		SELECT $1, id, now() FROM conversations WHERE assigned_user_id=$1`, userID)
+	check([]string{models.AllConversations}, 30)
+	check([]string{models.AssignedConversations}, 0)
+}
 
 // stubSettingsStore satisfies the settingsStore dependency for query building tests.
 type stubSettingsStore struct{}
@@ -127,8 +168,8 @@ func TestMakeConversationsCountQueryAssignedList(t *testing.T) {
 	if !strings.Contains(query, "assigned_user_id = $") {
 		t.Fatalf("expected assigned_user_id condition: %s", query)
 	}
-	if len(args) != 1 || args[0] != 7 {
-		t.Fatalf("expected single assignee arg, got %v", args)
+	if len(args) != 2 || args[0] != 7 || args[1] != 7 {
+		t.Fatalf("expected assignee and inbox viewer args, got %v", args)
 	}
 }
 
@@ -157,14 +198,14 @@ func TestMakeViewCountsQuerySingleStatement(t *testing.T) {
 	if !strings.Contains(query, "SELECT 3 AS view_id") || !strings.Contains(query, "SELECT 9 AS view_id") {
 		t.Fatalf("expected both view ids to be selected: %s", query)
 	}
-	// Each view contributes one inbox_id filter argument, numbered continuously.
-	if len(args) != 2 {
-		t.Fatalf("expected 2 args across both views, got %d: %v", len(args), args)
+	// Each view contributes the inbox viewer and an inbox_id filter, numbered continuously.
+	if len(args) != 4 {
+		t.Fatalf("expected 4 args across both views, got %d: %v", len(args), args)
 	}
 	if !strings.Contains(query, "$1") || !strings.Contains(query, "$2") {
 		t.Fatalf("expected continuous placeholder numbering: %s", query)
 	}
-	if strings.Contains(query, "$3") {
+	if strings.Contains(query, "$5") {
 		t.Fatalf("placeholder numbering ran past the bound args: %s", query)
 	}
 }

@@ -4,6 +4,7 @@
   </div>
   <Spinner v-if="formLoading"></Spinner>
   <div v-else>
+    <InboxAccessForm v-if="inbox.id" :inboxID="inbox.id" />
     <EmailInboxForm
       :initialValues="inbox"
       :submitForm="submitForm"
@@ -16,6 +17,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import api from '../../../api'
+import InboxAccessForm from '@/features/admin/inbox/InboxAccessForm.vue'
 import EmailInboxForm from '@/features/admin/inbox/EmailInboxForm.vue'
 import { CustomBreadcrumb } from '@shared-ui/components/ui/breadcrumb/index.js'
 

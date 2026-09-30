@@ -23,5 +23,7 @@ export function useInboxNavigation() {
   const navigateToInbox = (type) => navigate('inbox', { type })
   const navigateToViewInbox = (viewID) => navigate('view-inbox', { viewID })
 
-  return { navigateToInbox, navigateToViewInbox }
+  const navigateToMailbox = (inboxID) => router.push({ name: 'mailbox-inbox', params: { inboxID } })
+
+  return { navigateToInbox, navigateToViewInbox, navigateToMailbox }
 }

@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { AtSign, Eye, Layers, Search } from 'lucide-vue-next'
+import { Eye, Layers, Search } from 'lucide-vue-next'
 import { navIconMap } from '@main/constants/navIcons'
 import { adminNavItems } from '@main/constants/navigation'
 import { permissions } from '@main/constants/permissions'
@@ -12,8 +12,6 @@ import { useInboxNavigation } from '@main/composables/useInboxNavigation'
 import { SECTIONS } from '../sections'
 
 const INBOX_TYPES = [
-  { type: 'mentioned', labelKey: 'conversation.mentions', icon: AtSign },
-
   { type: 'all', labelKey: 'globals.messages.all', icon: Layers }
 ]
 

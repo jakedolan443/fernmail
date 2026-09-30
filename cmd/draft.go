@@ -105,6 +105,10 @@ func handleDeleteConversationDraft(r *fastglue.Request) error {
 		return sendErrorEnvelope(r, err)
 	}
 
+	if _, err := enforceConversationAccess(app, uuid, user); err != nil {
+		return sendErrorEnvelope(r, err)
+	}
+
 	if err := app.conversation.DeleteConversationDraft(0, uuid, user.ID, draftType); err != nil {
 		return sendErrorEnvelope(r, err)
 	}

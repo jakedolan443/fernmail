@@ -40,6 +40,7 @@ LEFT JOIN teams ON conversations.assigned_team_id = teams.id
 LEFT JOIN inboxes ON conversations.inbox_id = inboxes.id
 LEFT JOIN conversation_statuses cs ON conversations.status_id = cs.id
 WHERE inboxes.channel = 'email' AND conversations.id IN (SELECT id FROM matched_conversations)
+  AND can_access_inbox(conversations.inbox_id, $2)
   AND $3
   AND (
        $4
@@ -92,6 +93,7 @@ LEFT JOIN inboxes ON conversations.inbox_id = inboxes.id
 LEFT JOIN conversation_statuses cs ON conversations.status_id = cs.id
 WHERE inboxes.channel = 'email' AND conversation_messages.type != 'activity'
   AND conversation_messages.text_content ILIKE $10 ESCAPE '\'
+  AND can_access_inbox(conversations.inbox_id, $2)
   AND $3
   AND (
        $4

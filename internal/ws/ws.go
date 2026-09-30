@@ -134,6 +134,28 @@ func (h *Hub) ListSubscribers(uuid string) []*Client {
 	return out
 }
 
+// AuthorizedListSubscribers rechecks subscriptions so revocation takes effect on live connections.
+func (h *Hub) AuthorizedListSubscribers(uuid string) []*Client {
+	clients := h.ListSubscribers(uuid)
+	if h.conversationStore == nil {
+		return nil
+	}
+	checked := map[int]bool{}
+	allowed := map[int]bool{}
+	result := make([]*Client, 0, len(clients))
+	for _, client := range clients {
+		if !checked[client.ID] {
+			ids, err := h.conversationStore.FilterAuthorizedListUUIDs(client.ID, []string{uuid})
+			allowed[client.ID] = err == nil && len(ids) > 0
+			checked[client.ID] = true
+		}
+		if allowed[client.ID] {
+			result = append(result, client)
+		}
+	}
+	return result
+}
+
 // ClearClientSubs drops all of a client's list and open subscriptions.
 func (h *Hub) ClearClientSubs(client *Client) {
 	h.subsMu.Lock()
@@ -233,7 +255,7 @@ func (h *Hub) BroadcastTypingToConversation(conversationUUID string, typingMsg m
 }
 
 func (h *Hub) BroadcastTypingToAllConversationClients(conversationUUID string, data []byte) {
-	for _, c := range h.ListSubscribers(conversationUUID) {
+	for _, c := range h.AuthorizedListSubscribers(conversationUUID) {
 		c.SendMessage(data, websocket.TextMessage)
 	}
 }

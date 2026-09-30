@@ -3,12 +3,17 @@
     <span class="min-w-0 flex-1 truncate text-sm font-semibold" :title="userStore.getFullName">
       {{ userStore.getFullName }}
     </span>
+    <BrowserNotifications />
     <Button
       v-if="isSettings || userStore.can('general_settings:manage')"
       variant="ghost"
       size="icon"
       class="h-9 w-9 shrink-0"
-      :class="isSettings ? 'text-success hover:text-success' : 'text-muted-foreground hover:text-foreground'"
+      :class="
+        isSettings
+          ? 'text-success hover:text-success'
+          : 'text-muted-foreground hover:text-foreground'
+      "
       :aria-label="isSettings ? 'Back to mailbox' : 'Settings'"
       :title="isSettings ? 'Back to mailbox' : 'Settings'"
       @click="router.push(isSettings ? '/inboxes/all' : '/admin/general')"
@@ -49,6 +54,7 @@ import { Settings, ArrowLeft, LogOut, Sun, Moon } from 'lucide-vue-next'
 import { Button } from '@shared-ui/components/ui/button'
 import { useUserStore } from '@main/stores/user'
 import { useLogout } from '@main/composables/useLogout'
+import BrowserNotifications from './BrowserNotifications.vue'
 
 const mode = useColorMode()
 const userStore = useUserStore()

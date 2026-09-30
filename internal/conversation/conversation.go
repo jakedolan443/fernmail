@@ -758,7 +758,7 @@ func (c *Manager) GetConversationListItem(uuid string) (models.ConversationListI
 	return item, nil
 }
 
-func (c *Manager) AuthorizedConnectedAgentIDs(assignedUserID, assignedTeamID null.Int) []int {
+func (c *Manager) AuthorizedConnectedAgentIDs(assignedUserID, assignedTeamID null.Int, inboxID int) []int {
 	connected := c.wsHub.ConnectedUserIDs()
 	if len(connected) == 0 {
 		return nil
@@ -770,6 +770,10 @@ func (c *Manager) AuthorizedConnectedAgentIDs(assignedUserID, assignedTeamID nul
 			continue
 		}
 		if !agent.Enabled {
+			continue
+		}
+		var allowed bool
+		if err := c.db.Get(&allowed, `SELECT can_access_inbox($1,$2)`, inboxID, id); err != nil || !allowed {
 			continue
 		}
 		if authz.CanReadAssignment(agent, assignedUserID, assignedTeamID) {
@@ -825,6 +829,12 @@ func (c *Manager) FilterLocation() string {
 
 // appendListTypeConditions returns the SQL conditions for the list types, appending their bind parameters to args.
 func appendListTypeConditions(listTypes []string, viewingUserID, userID int, teamIDs []int, args *[]any) ([]string, error) {
+	// All is the union of all assignment scopes. Do this before adding any scope
+	// arguments so a mixed list cannot leave unused SQL parameters behind.
+	if slices.Contains(listTypes, models.AllConversations) {
+		*args = append(*args, viewingUserID)
+		return []string{fmt.Sprintf("can_access_inbox(conversations.inbox_id, $%d)", len(*args))}, nil
+	}
 	conditions := make([]string, 0, len(listTypes))
 	for _, lt := range listTypes {
 		switch lt {
@@ -855,7 +865,13 @@ func appendListTypeConditions(listTypes []string, viewingUserID, userID int, tea
 			return nil, fmt.Errorf("unknown conversation type: %s", lt)
 		}
 	}
-	return conditions, nil
+
+	scope := "TRUE"
+	if len(conditions) > 0 {
+		scope = "(" + strings.Join(conditions, " OR ") + ")"
+	}
+	*args = append(*args, viewingUserID)
+	return []string{fmt.Sprintf("%s AND can_access_inbox(conversations.inbox_id, $%d)", scope, len(*args))}, nil
 }
 
 // appendTeamIDArgs appends team IDs to args and returns their placeholders, or NULL when there are none.

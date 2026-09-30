@@ -84,6 +84,7 @@
                 <p>{{ formatFullTimestamp(message.created_at) }}</p>
               </TooltipContent>
             </Tooltip>
+            <MessageConversationActions v-if="showConversationActions" />
           </div>
 
           <!-- Keep email transport details outside the bubble for other message types. -->
@@ -281,6 +282,7 @@ import SafeMessageContent from '@shared-ui/components/SafeMessageContent.vue'
 import ImageLightbox from '@/components/ImageLightbox.vue'
 import BubbleAttachmentPreview from '@main/features/conversation/message/attachment/BubbleAttachmentPreview.vue'
 import MessageEnvelope from './MessageEnvelope.vue'
+import MessageConversationActions from './MessageConversationActions.vue'
 
 import api from '@main/api'
 import { containsQuoteMarkers } from '@shared-ui/utils/quotedContent.js'
@@ -304,6 +306,7 @@ onMounted(async () => {
 
 const props = defineProps({
   message: Object,
+  showConversationActions: Boolean,
   direction: {
     type: String,
     validator: (v) => ['incoming', 'outgoing'].includes(v)

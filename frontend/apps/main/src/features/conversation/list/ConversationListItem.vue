@@ -10,6 +10,12 @@
           'hover:bg-accent/40': !isCurrent && !isItemSelected
         }"
       >
+        <span
+          v-if="isUnread"
+          class="pointer-events-none absolute inset-y-0 left-0 w-1 bg-success"
+          data-unread-indicator
+          aria-hidden="true"
+        />
         <div class="flex items-start gap-2">
           <div
             v-if="showCheckbox"
@@ -159,11 +165,16 @@ const handleMarkAsUnread = () => {
 }
 
 const conversationRoute = computed(() => {
-  const baseRoute = route.params.viewID ? 'view-inbox-conversation' : 'inbox-conversation'
+  const baseRoute = route.params.inboxID
+    ? 'mailbox-inbox-conversation'
+    : route.params.viewID
+      ? 'view-inbox-conversation'
+      : 'inbox-conversation'
   return {
     name: baseRoute,
     params: {
       uuid: props.conversation.uuid,
+      ...(route.params.inboxID && { inboxID: route.params.inboxID }),
       ...(baseRoute === 'view-inbox-conversation' && { viewID: route.params.viewID })
     },
     query: props.conversation.mentioned_message_uuid

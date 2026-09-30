@@ -67,6 +67,10 @@ describe('General Form Schema', () => {
         expect(() => schema.parse({ ...validForm, favicon_url: '/favicon.ico' })).toThrow()
     })
 
+    test('bundled Fernmail favicon accepted', () => {
+        expect(() => schema.parse({ ...validForm, favicon_url: '/favicon.svg' })).not.toThrow()
+    })
+
     test('logo_url optional', () => {
         expect(() => schema.parse(validForm)).not.toThrow()
     })
