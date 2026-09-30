@@ -10,21 +10,28 @@ import '@shared-ui/utils/string.js'
 import Root from './Root.vue'
 
 const setFavicon = (url) => {
-  let link = document.createElement("link")
-  link.rel = "icon"
+  const configured = new URL(url, window.location.origin)
+  // Keep the versioned bundled icon for default favicon settings.
+  if (
+    ['/favicon.ico', '/favicon.svg'].includes(configured.pathname) &&
+    [window.location.origin, 'http://localhost:9000'].includes(configured.origin)
+  )
+    return
+  let link = document.querySelector('#app-favicon') || document.createElement('link')
+  link.rel = 'icon'
+  link.removeAttribute('type')
   document.head.appendChild(link)
   link.href = url
 }
 
-async function initApp () {
+async function initApp() {
   const config = (await api.getConfig()).data.data
   const emitter = mitt()
   const lang = config['app.lang'] || 'en-US'
   const langMessages = await api.getLanguage(lang)
 
   // Set favicon.
-  if (config['app.favicon_url'])
-    setFavicon(config['app.favicon_url'])
+  if (config['app.favicon_url']) setFavicon(config['app.favicon_url'])
 
   // Initialize i18n.
   const i18nConfig = {

@@ -161,6 +161,7 @@ import {
   DropdownMenuTrigger
 } from '@shared-ui/components/ui/dropdown-menu'
 import { SidebarTrigger } from '@shared-ui/components/ui/sidebar'
+import { useInboxStore } from '@/stores/inbox'
 import { useConversationStore } from '@/stores/conversation'
 import { useBulkActionPermissions } from '@/composables/useBulkActionPermissions'
 import EmptyList from '@/features/conversation/list/ConversationEmptyList.vue'
@@ -169,6 +170,7 @@ import ConversationListItem from '@/features/conversation/list/ConversationListI
 import ConversationListItemSkeleton from '@/features/conversation/list/ConversationListItemSkeleton.vue'
 
 const conversationStore = useConversationStore()
+const inboxStore = useInboxStore()
 const { canBulkAct } = useBulkActionPermissions()
 const route = useRoute()
 const { t } = useI18n()
@@ -176,6 +178,12 @@ const { t } = useI18n()
 const hasSelection = computed(() => conversationStore.selectedCount > 0)
 
 const title = computed(() => {
+  if (route.params.inboxID) {
+    const mailbox = inboxStore.inboxes.find(
+      (item) => String(item.id) === String(route.params.inboxID)
+    )
+    return mailbox?.name || t('globals.terms.inbox')
+  }
   const typeKey = route.meta?.typeKey?.(route)
   if (typeKey) {
     return t(typeKey)

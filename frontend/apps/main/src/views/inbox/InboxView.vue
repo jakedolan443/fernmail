@@ -1,5 +1,5 @@
 <template>
-  <ConversationPlaceholder v-if="['inbox', 'view-inbox'].includes(route.name)" />
+  <ConversationPlaceholder v-if="['inbox', 'view-inbox', 'mailbox-inbox'].includes(route.name)" />
   <router-view />
 </template>
 
@@ -14,6 +14,7 @@ import ConversationPlaceholder from '@/features/conversation/ConversationPlaceho
 const route = useRoute()
 const type = computed(() => route.params.type)
 const viewID = computed(() => route.params.viewID)
+const inboxID = computed(() => route.params.inboxID)
 
 const conversationStore = useConversationStore()
 
@@ -22,6 +23,10 @@ let lastFetchedKey = ''
 const storeHasCurrentList = () => {
   const c = conversationStore.conversations
   if (!c.initialized) return false
+  if (inboxID.value)
+    return (
+      c.listType === CONVERSATION_LIST_TYPE.MAILBOX && String(c.inboxID) === String(inboxID.value)
+    )
   if (viewID.value)
     return c.listType === CONVERSATION_LIST_TYPE.VIEW && String(c.viewID) === String(viewID.value)
   if (type.value) return c.listType === type.value
@@ -29,9 +34,9 @@ const storeHasCurrentList = () => {
 }
 
 const fetchForCurrentRoute = () => {
-  if (!type.value && !viewID.value) return
+  if (!type.value && !viewID.value && !inboxID.value) return
 
-  const key = `${type.value || ''}|${viewID.value || ''}`
+  const key = `${type.value || ''}|${viewID.value || ''}|${inboxID.value || ''}`
   if (key === lastFetchedKey) return
   lastFetchedKey = key
 
@@ -50,7 +55,17 @@ const fetchForCurrentRoute = () => {
   if (!conversationStore.getListStatus) {
     conversationStore.setListStatus(CONVERSATION_DEFAULT_STATUSES.OPEN, false)
   }
-  if (type.value) {
+  if (inboxID.value) {
+    conversationStore.fetchConversationsList(
+      true,
+      CONVERSATION_LIST_TYPE.MAILBOX,
+      0,
+      [],
+      0,
+      0,
+      Number(inboxID.value)
+    )
+  } else if (type.value) {
     conversationStore.fetchConversationsList(true, type.value)
   }
 }
@@ -68,5 +83,5 @@ watch(visibility, (v) => {
   }
 })
 
-watch([type, viewID], fetchForCurrentRoute)
+watch([type, viewID, inboxID], fetchForCurrentRoute)
 </script>

@@ -38,6 +38,7 @@ RETURNING id, uuid;
 SELECT
     COUNT(*) OVER() as total,
     conversations.id,
+    conversations.inbox_id,
     conversations.created_at,
     conversations.updated_at,
     conversations.uuid,
@@ -99,6 +100,7 @@ WHERE inboxes.channel = 'email' %s
 -- name: get-conversation-list-item
 SELECT
     conversations.id,
+    conversations.inbox_id,
     conversations.created_at,
     conversations.updated_at,
     conversations.uuid,
@@ -242,7 +244,7 @@ SELECT
     COUNT(*) AS "all"
 FROM conversations
 JOIN inboxes ON inboxes.id = conversations.inbox_id
-WHERE inboxes.channel = 'email' AND conversations.status_id IN (SELECT id FROM conversation_statuses WHERE category = 'open');
+WHERE inboxes.channel = 'email' AND can_access_inbox(conversations.inbox_id, $1) AND conversations.status_id IN (SELECT id FROM conversation_statuses WHERE category = 'open');
 
 -- name: get-conversations-count-base
 -- The list-type WHERE clause is appended at %s; view filters are added by BuildFilterQuery.
@@ -563,7 +565,7 @@ SELECT cd.id, cd.conversation_id, cd.user_id, cd.type, cd.content, cd.meta, cd.c
 FROM conversation_drafts cd
 INNER JOIN conversations c ON cd.conversation_id = c.id
 JOIN inboxes ON inboxes.id = c.inbox_id AND inboxes.channel = 'email'
-WHERE cd.user_id = $1
+WHERE cd.user_id = $1 AND can_access_inbox(c.inbox_id, $1)
 ORDER BY cd.updated_at DESC;
 
 -- name: delete-conversation-draft
@@ -613,6 +615,7 @@ DO UPDATE SET
 SELECT uuid::text
 FROM conversations
 WHERE uuid = ANY($1::uuid[])
+  AND can_access_inbox(conversations.inbox_id, $2)
   AND $4
   AND (
        $5

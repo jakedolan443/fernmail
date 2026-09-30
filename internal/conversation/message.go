@@ -627,6 +627,15 @@ func (m *Manager) insertMessage(ctx context.Context, message *models.Message) er
 	// Add this user as a participant if not already present.
 	m.addConversationParticipant(message.SenderID, message.ConversationUUID)
 
+	// Load the actual message author before broadcasting (a reply can come from
+	// someone other than the conversation's original correspondent).
+	refetchedMessage, refetchErr := m.GetMessage(message.UUID)
+	if refetchErr != nil {
+		m.lo.Error("error fetching message after insert", "error", refetchErr)
+	} else {
+		message.Author = refetchedMessage.Author
+	}
+
 	// Skip updating last_message and broadcasting for continuity emails.
 	if !message.IsContinuityMessage() {
 		// Hide CSAT message content as it contains a public link to the survey.
@@ -657,11 +666,8 @@ func (m *Manager) insertMessage(ctx context.Context, message *models.Message) er
 		m.BroadcastNewMessage(message, convItem, lastMessage)
 	}
 
-	// Refetch the message to get all fields populated (e.g., author, media URLs).
-	refetchedMessage, err := m.GetMessage(message.UUID)
-	if err != nil {
-		m.lo.Error("error fetching message after insert", "error", err)
-	} else {
+	// Return all populated fields, including media URLs.
+	if refetchErr == nil {
 		*message = refetchedMessage
 	}
 

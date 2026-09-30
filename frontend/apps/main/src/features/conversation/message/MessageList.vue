@@ -5,7 +5,7 @@
       class="flex-1 overflow-y-auto overscroll-contain [overflow-anchor:none]"
       @scroll="handleScroll"
     >
-      <div ref="contentEl" class="min-h-full px-4 pt-4 pb-10 relative">
+      <div ref="contentEl" class="min-h-full px-4 pt-3 pb-10 relative">
         <div v-if="showLoadMore" class="text-center mt-3">
           <Button
             size="sm"
@@ -38,11 +38,16 @@
             :data-message-uuid="row.message.uuid"
             :class="[row.spacingClass, { 'my-2': row.message.type === 'activity' }]"
           >
-            <DaySeparator v-if="row.showDaySeparator" :date="row.message.created_at" class="mb-4" />
+            <DaySeparator
+              v-if="row.showDaySeparator"
+              :date="row.message.created_at"
+              :class="isEmailConversation ? 'mb-2' : 'mb-4'"
+            />
             <div v-if="!row.message.private && row.message.type !== 'activity'">
               <MessageBubble
                 :message="row.message"
                 :direction="row.message.type"
+                :show-conversation-actions="row.message.uuid === firstEmailUUID"
                 :group-with-prev="row.groupWithPrev"
                 :group-with-next="row.groupWithNext"
               />
@@ -106,6 +111,12 @@ const route = useRoute()
 const conversationStore = useConversationStore()
 const userStore = useUserStore()
 const isEmailConversation = computed(() => conversationStore.current?.inbox_channel === 'email')
+const firstEmailUUID = computed(
+  () =>
+    conversationStore.conversationMessages.find(
+      (message) => !message.private && message.type !== 'activity'
+    )?.uuid
+)
 const threadEl = ref(null)
 const contentEl = ref(null)
 const emitter = useEmitter()

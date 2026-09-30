@@ -693,8 +693,8 @@ func startInboxes(ctx context.Context, mgr *inbox.Manager, msgStore inbox.Messag
 }
 
 // initAuthz initializes authorization enforcer.
-func initAuthz(i18n *i18n.I18n) *authz.Enforcer {
-	enforcer, err := authz.NewEnforcer(initLogger("authz"), i18n)
+func initAuthz(i18n *i18n.I18n, inbox *inbox.Manager) *authz.Enforcer {
+	enforcer, err := authz.NewEnforcer(initLogger("authz"), i18n, inbox.CanAccess)
 	if err != nil {
 		log.Fatalf("error initializing authz: %v", err)
 	}

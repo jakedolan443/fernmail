@@ -1,5 +1,6 @@
 export const CONVERSATION_LIST_TYPE = {
   VIEW: 'view',
+  MAILBOX: 'mailbox',
   ALL: 'all',
   MENTIONED: 'mentioned'
 }

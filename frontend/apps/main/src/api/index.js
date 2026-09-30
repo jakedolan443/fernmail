@@ -211,6 +211,11 @@ const createInbox = (data) =>
       'Content-Type': 'application/json'
     }
   })
+const getMailboxes = () => http.get('/api/v1/mailboxes')
+const getMailboxConversations = (id, params) =>
+  http.get(`/api/v1/mailboxes/${id}/conversations`, { params })
+const getInboxAccess = (id) => http.get(`/api/v1/inboxes/${id}/access`)
+const updateInboxAccess = (id, data) => http.put(`/api/v1/inboxes/${id}/access`, data)
 const getInboxes = () => http.get('/api/v1/inboxes')
 const getInbox = (id) => http.get(`/api/v1/inboxes/${id}`)
 const toggleInbox = (id) => http.put(`/api/v1/inboxes/${id}/toggle`)
@@ -321,6 +326,10 @@ export default {
   getUsers,
   getInbox,
   getInboxes,
+  getMailboxes,
+  getMailboxConversations,
+  getInboxAccess,
+  updateInboxAccess,
   getLanguage,
   getAvailableLanguages,
   getConversation,

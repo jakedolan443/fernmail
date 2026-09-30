@@ -99,6 +99,7 @@ type receiverState struct {
 }
 
 type Manager struct {
+	db            *sqlx.DB
 	mu            sync.RWMutex
 	queries       queries
 	inboxes       map[int]Inbox
@@ -132,6 +133,7 @@ func New(lo *logf.Logger, db *sqlx.DB, i18n *i18n.I18n, encryptionKey string) (*
 	}
 
 	m := &Manager{
+		db:            db,
 		lo:            lo,
 		inboxes:       make(map[int]Inbox),
 		receivers:     make(map[int]receiverState),

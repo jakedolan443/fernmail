@@ -37,7 +37,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
 import { retireNotificationWorker } from './composables/retireNotificationWorker'
-import { useStorage } from '@vueuse/core'
+import { useStorage, useEventListener } from '@vueuse/core'
 import { RouterView } from 'vue-router'
 import { useUserStore } from './stores/user'
 import { initWS } from './websocket.js'
@@ -50,6 +50,7 @@ import { useInboxStore } from './stores/inbox'
 import { useUsersStore } from './stores/users'
 import { useSharedViewStore } from './stores/sharedView'
 import { useIdleDetection } from './composables/useIdleDetection'
+import { useMailboxTitle } from './composables/useMailboxTitle'
 import { useViewStore } from './stores/view'
 import PageHeader from './components/layout/PageHeader.vue'
 import ViewForm from '@/features/view/ViewForm.vue'
@@ -101,6 +102,8 @@ const createConversationContact = ref(null)
 const { t } = useI18n()
 initWS()
 useIdleDetection()
+useMailboxTitle()
+useEventListener(window, 'focus', () => conversationStore.fetchSidebarCounts({ force: true }))
 
 onMounted(() => {
   retireNotificationWorker()

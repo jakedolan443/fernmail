@@ -33,6 +33,26 @@ const routes = [
     component: () => import('@main/App.vue'),
     children: [
       {
+        path: '/inboxes/mailbox/:inboxID',
+        component: () => import('@main/layouts/inbox/InboxLayout.vue'),
+        meta: { titleKey: 'globals.terms.inbox', hidePageHeader: true },
+        children: [
+          {
+            path: '',
+            name: 'mailbox-inbox',
+            component: () => import('@main/views/inbox/InboxView.vue'),
+            children: [
+              {
+                path: 'conversation/:uuid',
+                name: 'mailbox-inbox-conversation',
+                component: () => import('@main/views/conversation/ConversationDetailView.vue'),
+                props: true
+              }
+            ]
+          }
+        ]
+      },
+      {
         path: '/inboxes/views/:viewID',
         name: 'views',
         props: true,
@@ -288,7 +308,7 @@ router.beforeEach((to, from, next) => {
   }
 
   const appSettingsStore = useAppSettingsStore()
-  const siteName = appSettingsStore.settings?.['app.site_name'] || 'libredesk'
+  const siteName = appSettingsStore.settings?.['app.site_name'] || 'Fernmail'
   const i18n = getI18n()
   const typeKey = typeof to.meta?.typeKey === 'function' ? to.meta.typeKey(to) : ''
   const titleKey = typeKey || to.meta?.titleKey

@@ -23,7 +23,7 @@ const sidebarCountsScanCap = 100
 
 // GetSidebarCounts returns open counts for the standard inboxes and a count per accessible view.
 func (c *Manager) GetSidebarCounts(viewingUserID int, permissions []string, teamIDs []int, views []vmodels.View) (models.SidebarCounts, error) {
-	out := models.SidebarCounts{Views: map[int]int{}}
+	out := models.SidebarCounts{Views: map[int]int{}, Inboxes: map[int]int{}}
 	ctx, cancel := context.WithTimeout(context.Background(), sidebarCountsQueryTimeout)
 	defer cancel()
 
@@ -34,6 +34,28 @@ func (c *Manager) GetSidebarCounts(viewingUserID int, permissions []string, team
 	lists := ListsForUserPermissions(permissions)
 	if len(lists) == 0 {
 		return out, nil
+	}
+
+	unread, err := c.getUnreadMessageCount(ctx, viewingUserID, teamIDs, lists)
+	if err != nil {
+		return out, err
+	}
+	out.Unread = unread
+	args := []any{}
+	conditions, err := appendListTypeConditions(lists, viewingUserID, viewingUserID, teamIDs, &args)
+	if err != nil {
+		return out, err
+	}
+	var mailboxCounts []struct {
+		InboxID int `db:"inbox_id"`
+		Count   int `db:"count"`
+	}
+	if err := c.db.SelectContext(ctx, &mailboxCounts, `SELECT conversations.inbox_id, COUNT(*) AS count
+        FROM conversations WHERE status_id IN (SELECT id FROM conversation_statuses WHERE category='open') `+listTypeWhereClause(conditions)+` GROUP BY conversations.inbox_id`, args...); err != nil {
+		return out, err
+	}
+	for _, row := range mailboxCounts {
+		out.Inboxes[row.InboxID] = row.Count
 	}
 
 	accessible := make([]vmodels.View, 0, len(views))
@@ -51,6 +73,32 @@ func (c *Manager) GetSidebarCounts(viewingUserID int, permissions []string, team
 		maps.Copy(out.Views, viewCounts)
 	}
 	return out, nil
+}
+
+// getUnreadMessageCount counts across all accessible mail, regardless of the
+// current list page, status or view. Use the same read cutoff as conversation rows.
+func (c *Manager) getUnreadMessageCount(ctx context.Context, userID int, teamIDs []int, lists []string) (int, error) {
+	if len(lists) == 0 {
+		return 0, nil
+	}
+	args := []any{userID}
+	conditions, err := appendListTypeConditions(lists, userID, userID, teamIDs, &args)
+	if err != nil {
+		return 0, err
+	}
+	query := `SELECT COUNT(*) FROM conversations
+		JOIN inboxes ON inboxes.id = conversations.inbox_id
+		JOIN conversation_messages AS messages ON messages.conversation_id = conversations.id
+		LEFT JOIN conversation_last_seen AS seen ON seen.conversation_id = conversations.id AND seen.user_id = $1
+		WHERE inboxes.channel = 'email'
+		AND messages.created_at > COALESCE(seen.last_seen_at, '1970-01-01'::TIMESTAMPTZ)
+		AND (messages.meta IS NULL OR NOT COALESCE((messages.meta->>'continuity_email')::boolean, false))
+		` + listTypeWhereClause(conditions)
+	var count int
+	if err := c.db.GetContext(ctx, &count, query, args...); err != nil {
+		return 0, fmt.Errorf("counting unread mail: %w", err)
+	}
+	return count, nil
 }
 
 // GetViewCount returns the capped open count for one view.

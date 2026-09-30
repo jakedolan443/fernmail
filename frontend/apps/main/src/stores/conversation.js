@@ -42,6 +42,8 @@ export const useConversationStore = defineStore('conversation', () => {
   const sidebarCounts = reactive({
     mentioned: 0,
     all: 0,
+    unread: 0,
+    inboxes: {},
     views: {}
   })
 
@@ -66,7 +68,9 @@ export const useConversationStore = defineStore('conversation', () => {
         if (!data) return
         sidebarCounts.mentioned = data.mentioned || 0
         sidebarCounts.all = data.all || 0
+        sidebarCounts.unread = data.unread || 0
         sidebarCounts.views = data.views || {}
+        sidebarCounts.inboxes = data.inboxes || {}
         sidebarCountsFetchedAt = Date.now()
       } catch {
         // The sidebar works without counts.
@@ -213,6 +217,7 @@ export const useConversationStore = defineStore('conversation', () => {
     listFilters: [],
     viewID: 0,
     teamID: 0,
+    inboxID: 0,
     loading: false,
     fetching: false,
     initialized: false,
@@ -339,13 +344,10 @@ export const useConversationStore = defineStore('conversation', () => {
   })
 
   function markConversationAsRead(uuid) {
-    const index = conversations.data.findIndex((conv) => conv.uuid === uuid)
-    if (index !== -1) {
-      setTimeout(() => {
-        if (conversations.data?.[index]) {
-          conversations.data[index].unread_message_count = 0
-        }
-      }, 3000)
+    const row = conversations.data.find((conv) => conv.uuid === uuid)
+    if (row) {
+      sidebarCounts.unread = Math.max(0, sidebarCounts.unread - (row.unread_message_count || 0))
+      row.unread_message_count = 0
     }
   }
 
@@ -354,8 +356,14 @@ export const useConversationStore = defineStore('conversation', () => {
       await api.markConversationAsUnread(uuid)
       const index = conversations.data.findIndex((conv) => conv.uuid === uuid)
       if (index !== -1) {
+        sidebarCounts.unread =
+          Math.max(
+            0,
+            sidebarCounts.unread - (conversations.data[index].unread_message_count || 0)
+          ) + 1
         conversations.data[index].unread_message_count = 1
       }
+      fetchSidebarCounts({ force: true })
     } catch (err) {
       handleHTTPError(err)
     }
@@ -592,7 +600,8 @@ export const useConversationStore = defineStore('conversation', () => {
       conversations.teamID,
       conversations.listFilters,
       conversations.viewID,
-      conversations.page + 1
+      conversations.page + 1,
+      conversations.inboxID
     )
   }
 
@@ -603,7 +612,8 @@ export const useConversationStore = defineStore('conversation', () => {
       conversations.teamID,
       conversations.listFilters,
       conversations.viewID,
-      conversations.page
+      conversations.page,
+      conversations.inboxID
     )
   }
 
@@ -614,7 +624,8 @@ export const useConversationStore = defineStore('conversation', () => {
       conversations.teamID,
       conversations.listFilters,
       conversations.viewID,
-      1
+      1,
+      conversations.inboxID
     )
   }
 
@@ -624,19 +635,22 @@ export const useConversationStore = defineStore('conversation', () => {
     teamID = 0,
     filters = [],
     viewID = 0,
-    page = 0
+    page = 0,
+    inboxID = 0
   ) {
     if (!listType) return
     if (
       conversations.listType !== listType ||
       conversations.teamID !== teamID ||
-      conversations.viewID !== viewID
+      conversations.viewID !== viewID ||
+      conversations.inboxID !== inboxID
     ) {
       resetConversations()
     }
     conversations.listType = listType
-    if (teamID) conversations.teamID = teamID
-    if (viewID) conversations.viewID = viewID
+    conversations.teamID = teamID
+    conversations.viewID = viewID
+    conversations.inboxID = inboxID
     if (conversations.status) {
       filters = filters.filter((f) => f.model !== 'conversation_statuses')
       filters.push({
@@ -654,7 +668,14 @@ export const useConversationStore = defineStore('conversation', () => {
     const isStale = () => seq !== contextSeq
     try {
       conversations.errorMessage = ''
-      const response = await makeConversationListRequest(listType, teamID, viewID, filters, page)
+      const response = await makeConversationListRequest(
+        listType,
+        teamID,
+        viewID,
+        filters,
+        page,
+        inboxID
+      )
       if (isStale()) return
       processConversationListResponse(response)
     } catch (error) {
@@ -675,11 +696,16 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
-  async function makeConversationListRequest(listType, teamID, viewID, filters, page) {
+  async function makeConversationListRequest(listType, teamID, viewID, filters, page, inboxID) {
     filters = filters.length > 0 ? JSON.stringify(filters) : []
     switch (listType) {
       case CONVERSATION_LIST_TYPE.ALL:
-        return await api.getAllConversations({
+      case CONVERSATION_LIST_TYPE.MAILBOX:
+        return await (
+          listType === CONVERSATION_LIST_TYPE.MAILBOX
+            ? (params) => api.getMailboxConversations(inboxID, params)
+            : api.getAllConversations
+        )({
           page: page,
           page_size: CONV_LIST_PAGE_SIZE,
           order_by:
@@ -782,7 +808,13 @@ export const useConversationStore = defineStore('conversation', () => {
   async function updateAssigneeLastSeen(uuid) {
     if (!isViewingConversation(uuid)) return
     markConversationAsRead(uuid)
-    api.updateAssigneeLastSeen(uuid).catch(() => {})
+    try {
+      await api.updateAssigneeLastSeen(uuid)
+      // Reconcile the total, including threads outside the visible page and counts capped at 9+.
+      fetchSidebarCounts({ force: true })
+    } catch {
+      // Leave read-state retries to the next visit or focus event.
+    }
   }
 
   function isConversationInList(uuid) {
@@ -944,7 +976,10 @@ export const useConversationStore = defineStore('conversation', () => {
     incrementMessageVersion()
   }
 
-  function canPushInsert() {
+  function canPushInsert(payload) {
+    if (conversations.listType === CONVERSATION_LIST_TYPE.MAILBOX) {
+      return Number(payload.inbox_id) === Number(conversations.inboxID)
+    }
     return conversations.listType === CONVERSATION_LIST_TYPE.ALL
   }
 

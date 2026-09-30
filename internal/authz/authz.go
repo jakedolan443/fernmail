@@ -1,6 +1,7 @@
 package authz
 
 import (
+	"fmt"
 	"slices"
 
 	authzmodels "github.com/abhinavxd/libredesk/internal/authz/models"
@@ -13,12 +14,16 @@ import (
 )
 
 type Enforcer struct {
-	lo   *logf.Logger
-	i18n *i18n.I18n
+	lo          *logf.Logger
+	i18n        *i18n.I18n
+	inboxAccess func(userID, inboxID int) (bool, error)
 }
 
-func NewEnforcer(lo *logf.Logger, i18n *i18n.I18n) (*Enforcer, error) {
-	return &Enforcer{lo: lo, i18n: i18n}, nil
+func NewEnforcer(lo *logf.Logger, i18n *i18n.I18n, checkInbox func(int, int) (bool, error)) (*Enforcer, error) {
+	if checkInbox == nil {
+		return nil, fmt.Errorf("inbox access checker is required")
+	}
+	return &Enforcer{lo: lo, i18n: i18n, inboxAccess: checkInbox}, nil
 }
 
 // Enforce returns true if the user's permission list contains "obj:act".
@@ -27,14 +32,20 @@ func (e *Enforcer) Enforce(user umodels.User, obj, act string) (bool, error) {
 }
 
 // EnforceConversationAccess determines if a user has access to a specific conversation based on their permissions.
-// Requires basic "read" permission AND one of the following conditions:
+// Requires inbox access and basic "read" permission AND one of the following conditions:
 // 1. User has the "read_all" permission, allowing access to all conversations.
 // 2. User has the "read_assigned" permission and is the assigned user.
 // 3. User has the "read_team_inbox" permission and is part of the assigned team, with the conversation NOT assigned to any user.
 // 4. User has the "read_unassigned" permission and the conversation is not assigned to any user or team.
 // Returns true if access is granted, false otherwise. In case of an error while checking permissions returns false and the error.
 func (e *Enforcer) EnforceConversationAccess(user umodels.User, conversation cmodels.Conversation) (bool, error) {
-	return CanReadAssignment(user, conversation.AssignedUserID, conversation.AssignedTeamID), nil
+	if !CanReadAssignment(user, conversation.AssignedUserID, conversation.AssignedTeamID) {
+		return false, nil
+	}
+	if e.inboxAccess == nil {
+		return false, fmt.Errorf("inbox access checker is required")
+	}
+	return e.inboxAccess(user.ID, conversation.InboxID)
 }
 
 func CanReadAssignment(user umodels.User, assignedUserID, assignedTeamID null.Int) bool {

@@ -9,7 +9,7 @@
       <CardContent class="p-6 space-y-5">
         <div class="space-y-1 text-center">
           <CardTitle class="text-2xl font-bold text-foreground">
-            {{ appSettingsStore.public_config?.['app.site_name'] || 'libredesk' }}
+            <FernmailLogo :name="appSettingsStore.public_config?.['app.site_name'] || 'Fernmail'" />
           </CardTitle>
           <p class="text-sm text-muted-foreground">{{ t('auth.signIn') }}</p>
         </div>
@@ -112,6 +112,7 @@
 </template>
 
 <script setup>
+import FernmailLogo from '@main/components/brand/FernmailLogo.vue'
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { handleHTTPError } from '@shared-ui/utils/http.js'
@@ -177,7 +178,9 @@ onMounted(async () => {
 const showOIDCError = () => {
   const { error, ...query } = router.currentRoute.value.query
   if (!error) return
-  errorMessage.value = t(Object.hasOwn(oidcErrorKeys, error) ? oidcErrorKeys[error] : 'auth.oidcLoginFailed')
+  errorMessage.value = t(
+    Object.hasOwn(oidcErrorKeys, error) ? oidcErrorKeys[error] : 'auth.oidcLoginFailed'
+  )
   applyTemporaryClass('login-container', 'animate-shake')
   router.replace({ query })
 }

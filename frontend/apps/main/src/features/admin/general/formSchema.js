@@ -33,7 +33,7 @@ export const createFormSchema = (t) =>
       .url({
         message: t('admin.general.faviconURL.valid')
       })
-      .url(),
+      .or(z.literal('/favicon.svg')),
     max_file_upload_size: z
       .number({
         required_error: t('globals.messages.required')

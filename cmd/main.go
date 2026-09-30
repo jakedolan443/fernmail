@@ -62,7 +62,7 @@ import (
 var (
 	ko          = koanf.New(".")
 	ctx         = context.Background()
-	appName     = "libredesk"
+	appName     = "fernmail"
 	frontendDir = "frontend/dist/main"
 
 	// Injected at build time.
@@ -275,7 +275,7 @@ func main() {
 		accountmail:    accountmail,
 		consts:         atomic.Value{},
 		conversation:   conversation,
-		authz:          initAuthz(i18n),
+		authz:          initAuthz(i18n, inbox),
 		view:           initView(db, i18n),
 		search:         initSearch(db, i18n, conversation),
 		role:           initRole(db, i18n),

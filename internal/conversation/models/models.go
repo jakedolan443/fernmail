@@ -61,6 +61,7 @@ var (
 
 // ConversationListItem represents a conversation in list views
 type ConversationListItem struct {
+	InboxID               int                     `db:"inbox_id" json:"inbox_id"`
 	Total                 int                     `db:"total" json:"-"`
 	ID                    int                     `db:"id" json:"id"`
 	CreatedAt             time.Time               `db:"created_at" json:"created_at"`

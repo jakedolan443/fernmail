@@ -21,7 +21,7 @@ func newTestEnforcer(t *testing.T) *Enforcer {
 		t.Fatalf("i18n init: %v", err)
 	}
 	lo := logf.New(logf.Opts{})
-	e, err := NewEnforcer(&lo, tr)
+	e, err := NewEnforcer(&lo, tr, func(int, int) (bool, error) { return true, nil })
 	if err != nil {
 		t.Fatalf("enforcer init: %v", err)
 	}

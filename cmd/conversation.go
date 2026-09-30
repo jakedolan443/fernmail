@@ -427,6 +427,9 @@ func handleCreateConversation(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, app.i18n.T("errors.parsingRequest"), nil, envelope.InputError)
 	}
 
+	if err := requireInboxAccess(app, auser.ID, req.InboxID); err != nil {
+		return sendErrorEnvelope(r, err)
+	}
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 
 	if err := validateCreateConversationRequest(req, app); err != nil {

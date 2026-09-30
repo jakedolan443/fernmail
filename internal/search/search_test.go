@@ -115,7 +115,11 @@ func TestConversationSearchFieldsAndRanking(t *testing.T) {
 		}
 	}
 
-	scope := models.ReadScope{Read: true, ReadAll: true}
+	var viewerID int
+	if err := db.Get(&viewerID, `INSERT INTO users(type, email, first_name) VALUES ('agent','search-reader@example.test','Reader') RETURNING id`); err != nil {
+		t.Fatal(err)
+	}
+	scope := models.ReadScope{UserID: viewerID, Read: true, ReadAll: true}
 	results, hasMore, cursor, err := manager.Conversations(models.Query{Term: "108", PageSize: 10}, scope)
 	if err != nil {
 		t.Fatalf("searching conversations: %v", err)

@@ -8,18 +8,21 @@ import api from '../api'
 export const useInboxStore = defineStore('inbox', () => {
   const inboxes = ref([])
   const emitter = useEmitter()
-  const options = computed(() => inboxes.value.map(inb => ({
-    label: inb.name,
-    value: String(inb.id)
-  })))
-  const emailOptions = computed(() => inboxes.value
-    .filter(inb => inb.channel === 'email')
-    .map(inb => ({ label: inb.name, value: String(inb.id) }))
+  const options = computed(() =>
+    inboxes.value.map((inb) => ({
+      label: inb.name,
+      value: String(inb.id)
+    }))
+  )
+  const emailOptions = computed(() =>
+    inboxes.value
+      .filter((inb) => inb.channel === 'email')
+      .map((inb) => ({ label: inb.name, value: String(inb.id) }))
   )
   const fetchInboxes = async (force = false) => {
     if (!force && inboxes.value.length) return
     try {
-      const response = await api.getInboxes()
+      const response = await api.getMailboxes()
       inboxes.value = response?.data?.data || []
     } catch (error) {
       emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {
@@ -32,6 +35,6 @@ export const useInboxStore = defineStore('inbox', () => {
     inboxes,
     options,
     emailOptions,
-    fetchInboxes,
+    fetchInboxes
   }
 })

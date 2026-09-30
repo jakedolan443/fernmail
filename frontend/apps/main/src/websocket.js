@@ -6,6 +6,7 @@ import { WS_EVENT, WS_EPHEMERAL_TYPES } from './constants/websocket'
 import { EMITTER_EVENTS } from './constants/emitterEvents.js'
 import { useEmitter } from './composables/useEmitter'
 import { getI18n } from './i18n'
+import { useBrowserNotificationsStore } from './stores/browserNotifications'
 
 export class WebSocketClient {
   constructor() {
@@ -20,6 +21,7 @@ export class WebSocketClient {
     this.pingInterval = null
     this.lastPong = Date.now()
     this.convStore = useConversationStore()
+    this.browserNotifications = useBrowserNotificationsStore()
 
     this.usersStore = useUsersStore()
     this.connectionStore = useConnectionStore()
@@ -63,7 +65,12 @@ export class WebSocketClient {
     this.lastPong = Date.now()
     this.setupPing()
     this.flushMessageQueue()
+    if (wasReconnect && window.location.pathname.startsWith('/inboxes')) {
+      window.location.reload()
+      return
+    }
     if (wasReconnect) {
+      this.convStore.fetchSidebarCounts({ force: true })
       // RESUB!
       const uuids = this.convStore.conversations.data?.map((c) => c.uuid) || []
       this.subscribeListReplace(uuids)
@@ -84,6 +91,10 @@ export class WebSocketClient {
 
       const data = JSON.parse(event.data)
       const handlers = {
+        mailbox_access_updated: () => {
+          this.browserNotifications.closeAll()
+          if (window.location.pathname.startsWith('/inboxes')) window.location.reload()
+        },
         [WS_EVENT.NEW_MESSAGE]: () => {
           const uuid = data.data.conversation_uuid
           const isOpen = this.convStore.conversation.data?.uuid === uuid
@@ -100,11 +111,15 @@ export class WebSocketClient {
             })
           }
 
-          if (!isOpen && this.convStore.isConversationInList(uuid)) {
+          if ((!isOpen || document.hidden) && this.convStore.isConversationInList(uuid)) {
             this.convStore.incrementUnread(uuid)
           }
 
+          if (!isOpen || document.hidden) this.convStore.sidebarCounts.unread++
+          this.convStore.refreshSidebarCounts()
+
           this.convStore.updateConversationMessage(data.data)
+          this.browserNotifications.notifyNewMessage(data.data)
         },
         [WS_EVENT.NEW_CONVERSATION]: () => {
           if (data.data && data.data.uuid) {

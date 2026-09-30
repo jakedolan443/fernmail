@@ -278,11 +278,11 @@
 // Email transport details live beside the bubble, so email content can use the
 // available width without a second padded header inside the message container.
 .message-bubble.email-message-bubble {
-  @apply w-full max-w-none min-w-0 rounded-none border-0 bg-transparent px-0 py-4 shadow-none;
+  @apply w-full max-w-none min-w-0 rounded-none border-0 bg-transparent px-0 pt-2 pb-3 shadow-none;
 }
 
 .email-message-header {
-  @apply flex items-start gap-4 px-1 pt-4;
+  @apply flex flex-wrap items-start gap-x-3 gap-y-1 px-1;
 }
 
 .email-message-date {

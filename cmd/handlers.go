@@ -126,7 +126,11 @@ func initHandlers(g *fastglue.Fastglue, hub *ws.Hub) {
 	g.POST("/api/v1/agents/set-password", rateLimit(tryAuth(handleSetPassword), "auth"))
 
 	// Inboxes.
-	g.GET("/api/v1/inboxes", auth(handleGetInboxes))
+	g.GET("/api/v1/mailboxes", perm(handleGetMailboxes, "conversations:read"))
+	g.GET("/api/v1/mailboxes/{id}/conversations", perm(handleGetMailboxConversations, "conversations:read"))
+	g.GET("/api/v1/inboxes", perm(handleGetInboxes, "inboxes:manage"))
+	g.GET("/api/v1/inboxes/{id}/access", perm(handleGetInboxAccess, "inboxes:manage"))
+	g.PUT("/api/v1/inboxes/{id}/access", perm(handleUpdateInboxAccess, "inboxes:manage"))
 	g.GET("/api/v1/inboxes/{id}", perm(handleGetInbox, "inboxes:manage"))
 	g.POST("/api/v1/inboxes", perm(handleCreateInbox, "inboxes:manage"))
 	g.PUT("/api/v1/inboxes/{id}/toggle", perm(handleToggleInbox, "inboxes:manage"))
@@ -177,6 +181,12 @@ func initHandlers(g *fastglue.Fastglue, hub *ws.Hub) {
 	// FIXME: Reduce the number of routes.
 	g.GET("/assets/{all:*}", serveFrontendStaticFiles)
 	g.GET("/images/{all:*}", serveFrontendStaticFiles)
+	getAndHead("/favicon.svg", func(r *fastglue.Request) error {
+		return serveMainFrontendFile(r, "favicon.svg", "image/svg+xml", "no-cache")
+	})
+	getAndHead("/favicon.ico", func(r *fastglue.Request) error {
+		return serveMainFrontendFile(r, "favicon.ico", "image/x-icon", "no-cache")
+	})
 	g.GET("/manifest.webmanifest", serveManifest)
 	g.GET("/sw.js", serveServiceWorker)
 	g.GET("/static/public/{all:*}", serveStaticFiles)
