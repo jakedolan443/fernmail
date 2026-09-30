@@ -30,6 +30,19 @@ import { useI18n } from 'vue-i18n'
 
 const emitter = useEmitter()
 const { t } = useI18n()
+
+const parseEmailAliases = (value, defaultAddress) => {
+  const addresses = String(value || '')
+    .split(',')
+    .map((address) => address.trim().toLowerCase())
+    .filter(Boolean)
+  return addresses.map((address) => ({
+    address,
+    name: address.split('@')[0],
+    enabled: true,
+    default: address === String(defaultAddress || '').trim().toLowerCase()
+  }))
+}
 const formLoading = ref(false)
 const isLoading = ref(false)
 const inbox = ref({})
@@ -47,6 +60,7 @@ const submitForm = (values) => {
       auth_type: values.auth_type,
       reply_to: values.reply_to,
       enable_plus_addressing: values.enable_plus_addressing,
+      email_aliases: parseEmailAliases(values.email_aliases_text, values.from),
       imap: [{ ...values.imap }],
       smtp: [{ ...values.smtp }]
     }
@@ -125,6 +139,9 @@ onMounted(async () => {
     inboxData.oauth = inboxData?.config?.oauth || {}
     inboxData.enable_plus_addressing = inboxData?.config?.enable_plus_addressing || false
     inboxData.reply_to = inboxData?.config?.reply_to || ''
+    inboxData.email_aliases_text = (inboxData?.config?.email_aliases || [])
+      .map((alias) => alias.address)
+      .join(', ')
     inbox.value = inboxData
   } catch (error) {
     emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {

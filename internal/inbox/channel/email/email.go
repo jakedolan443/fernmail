@@ -37,6 +37,7 @@ type Email struct {
 	fromNameTemplate       string
 	replyTo                string
 	enablePlusAddressing   bool
+	emailAliases           []models.EmailAlias
 	messageStore           inbox.MessageStore
 	maxIncomingMessageSize int64
 	messageSizeMu          sync.RWMutex
@@ -95,6 +96,7 @@ func New(store inbox.MessageStore, userStore inbox.UserStore, opts Opts) (*Email
 		from:                   opts.Config.From,
 		fromNameTemplate:       opts.Config.FromNameTemplate,
 		replyTo:                opts.Config.ReplyTo,
+		emailAliases:           opts.Config.EmailAliases,
 		smtpCfg:                opts.Config.SMTP,
 		imapCfg:                opts.Config.IMAP,
 		lo:                     opts.Lo,
@@ -176,6 +178,7 @@ func (e *Email) getCurrentConfig() models.Config {
 		OAuth:                oauth,
 		AuthType:             e.authType,
 		EnablePlusAddressing: e.enablePlusAddressing,
+		EmailAliases:         e.emailAliases,
 	}
 }
 

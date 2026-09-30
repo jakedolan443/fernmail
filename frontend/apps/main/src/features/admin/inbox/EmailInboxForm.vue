@@ -64,6 +64,21 @@
       </FormItem>
     </FormField>
 
+    <FormField v-if="showFormFields" v-slot="{ componentField }" name="email_aliases_text">
+      <FormItem>
+        <FormLabel>{{ $t('admin.inbox.emailAliases') }}</FormLabel>
+        <FormControl>
+          <Input
+            type="text"
+            :placeholder="t('admin.inbox.emailAliases.placeholder')"
+            v-bind="componentField"
+          />
+        </FormControl>
+        <FormDescription>{{ $t('admin.inbox.emailAliases.description') }}</FormDescription>
+        <FormMessage />
+      </FormItem>
+    </FormField>
+
     <!-- Toggle Fields -->
     <FormField v-if="showFormFields" v-slot="{ componentField, handleChange }" name="enabled">
       <FormItem>
@@ -851,6 +866,7 @@ const form = useForm({
     from: '',
     from_name_template: '',
     reply_to: '',
+    email_aliases_text: '',
     enabled: true,
     csat_enabled: false,
     enable_plus_addressing: true,

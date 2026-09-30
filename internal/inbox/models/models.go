@@ -44,6 +44,21 @@ type Config struct {
 	FromNameTemplate     string       `json:"from_name_template"`
 	ReplyTo              string       `json:"reply_to"`
 	EnablePlusAddressing bool         `json:"enable_plus_addressing"`
+	EmailAliases         []EmailAlias `json:"email_aliases"`
+}
+
+// EmailAlias is a logical address served by a physical email inbox.
+//
+// Aliases intentionally live in the email channel configuration rather than
+// becoming separate inbox records. A single IMAP mailbox is polled once, and
+// the recipient address is retained on the conversation to select the correct
+// From address for replies.
+type EmailAlias struct {
+	Address     string `json:"address"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	Enabled     bool   `json:"enabled"`
+	Default     bool   `json:"default"`
 }
 
 // OAuthConfig holds OAuth 2.0 authentication details.

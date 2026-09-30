@@ -19,6 +19,19 @@ import { useEmitter } from '../../../composables/useEmitter'
 import { handleHTTPError } from '@shared-ui/utils/http.js'
 import { useI18n } from 'vue-i18n'
 
+const parseEmailAliases = (value, defaultAddress) => {
+  const addresses = String(value || '')
+    .split(',')
+    .map((address) => address.trim().toLowerCase())
+    .filter(Boolean)
+  return addresses.map((address) => ({
+    address,
+    name: address.split('@')[0],
+    enabled: true,
+    default: address === String(defaultAddress || '').trim().toLowerCase()
+  }))
+}
+
 const { t } = useI18n()
 const emitter = useEmitter()
 const isLoading = ref(false)
@@ -37,6 +50,7 @@ const submitForm = (values) => {
     config: {
       reply_to: values.reply_to,
       enable_plus_addressing: values.enable_plus_addressing,
+      email_aliases: parseEmailAliases(values.email_aliases_text, values.from),
       imap: [values.imap],
       smtp: [values.smtp]
     }

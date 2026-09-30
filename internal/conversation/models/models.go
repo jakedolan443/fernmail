@@ -392,6 +392,7 @@ type IncomingMessage struct {
 	ContentType string
 	Meta        json.RawMessage
 	Attachments attachment.Attachments
+	EmailAlias  string
 
 	// Email threading
 	ConversationUUIDFromReplyTo string // UUID extracted from plus-addressed recipient (inbox+conv-{uuid}@domain)

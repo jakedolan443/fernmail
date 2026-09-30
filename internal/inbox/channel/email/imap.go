@@ -537,6 +537,22 @@ func (e *Email) processFullMessage(item imapclient.FetchItemDataBodySection, inc
 
 	incomingMsg.InReplyTo = inReplyTo
 	incomingMsg.References = references
+	incomingMsg.EmailAlias = resolveRecipientAlias(e.emailAliases, map[string]string{
+		"Delivered-To":  envelope.GetHeader("Delivered-To"),
+		"X-Original-To": envelope.GetHeader("X-Original-To"),
+		"To":            envelope.GetHeader("To"),
+		"Cc":            envelope.GetHeader("Cc"),
+	})
+	if incomingMsg.EmailAlias != "" {
+		var meta map[string]any
+		if err := json.Unmarshal(incomingMsg.Meta, &meta); err != nil {
+			meta = map[string]any{}
+		}
+		meta["email_alias"] = incomingMsg.EmailAlias
+		if incomingMsg.Meta, err = json.Marshal(meta); err != nil {
+			return fmt.Errorf("marshalling email alias metadata: %w", err)
+		}
+	}
 
 	// Extract conversation UUID from plus-addressed recipient (e.g., inbox+conv-{uuid}@domain)
 	incomingMsg.ConversationUUIDFromReplyTo = extractConversationUUIDFromRecipient(envelope)

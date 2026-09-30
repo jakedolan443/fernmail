@@ -21,6 +21,11 @@ export function useConversationFilters() {
       operators: FIELD_OPERATORS.SELECT,
       options: iStore.options
     },
+    email_alias: {
+      label: t('conversation.emailAlias'),
+      type: FIELD_TYPE.TEXT,
+      operators: FIELD_OPERATORS.TEXT_EXACT
+    },
     created_at: {
       label: t('globals.terms.createdAt'),
       type: FIELD_TYPE.DATE,

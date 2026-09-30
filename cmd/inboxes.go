@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/mail"
 
 	"strconv"
@@ -195,9 +196,14 @@ func validateInbox(app *App, inbox imodels.Inbox) error {
 		}
 		var cfg imodels.Config
 		if len(inbox.Config) > 0 {
-			if err := json.Unmarshal(inbox.Config, &cfg); err == nil && cfg.ReplyTo != "" {
-				if _, err := mail.ParseAddress(cfg.ReplyTo); err != nil {
-					return envelope.NewError(envelope.InputError, app.i18n.T("validation.invalidEmail"), nil)
+			if err := json.Unmarshal(inbox.Config, &cfg); err == nil {
+				if cfg.ReplyTo != "" {
+					if _, err := mail.ParseAddress(cfg.ReplyTo); err != nil {
+						return envelope.NewError(envelope.InputError, app.i18n.T("validation.invalidEmail"), nil)
+					}
+				}
+				if err := validateEmailAliases(cfg.EmailAliases); err != nil {
+					return envelope.NewError(envelope.InputError, err.Error(), nil)
 				}
 			}
 		}
@@ -217,6 +223,32 @@ func validateInbox(app *App, inbox imodels.Inbox) error {
 		if err := validateEmailConfig(app, inbox.Config); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func validateEmailAliases(aliases []imodels.EmailAlias) error {
+	seen := make(map[string]struct{}, len(aliases))
+	defaults := 0
+	for _, alias := range aliases {
+		address := strings.ToLower(strings.TrimSpace(alias.Address))
+		if address == "" {
+			return fmt.Errorf("email alias address is required")
+		}
+		parsed, err := mail.ParseAddress(address)
+		if err != nil || !strings.EqualFold(parsed.Address, address) {
+			return fmt.Errorf("invalid email alias: %s", alias.Address)
+		}
+		if _, exists := seen[address]; exists {
+			return fmt.Errorf("duplicate email alias: %s", alias.Address)
+		}
+		seen[address] = struct{}{}
+		if alias.Default {
+			defaults++
+		}
+	}
+	if defaults > 1 {
+		return fmt.Errorf("only one email alias may be the default")
 	}
 	return nil
 }
@@ -310,6 +342,11 @@ func trimInboxFields(inb *imodels.Inbox) error {
 // Passwords and secrets are intentionally NOT trimmed.
 func trimEmailConfig(cfg *imodels.Config) {
 	cfg.ReplyTo = strings.TrimSpace(cfg.ReplyTo)
+	for i := range cfg.EmailAliases {
+		cfg.EmailAliases[i].Address = strings.ToLower(strings.TrimSpace(cfg.EmailAliases[i].Address))
+		cfg.EmailAliases[i].Name = strings.TrimSpace(cfg.EmailAliases[i].Name)
+		cfg.EmailAliases[i].DisplayName = strings.TrimSpace(cfg.EmailAliases[i].DisplayName)
+	}
 
 	// Trim IMAP configs.
 	for i := range cfg.IMAP {

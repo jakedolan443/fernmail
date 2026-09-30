@@ -360,20 +360,22 @@ func (m *Manager) Update(id int, inbox imodels.Inbox) (imodels.Inbox, error) {
 	switch current.Channel {
 	case "email":
 		var currentCfg struct {
-			AuthType             string            `json:"auth_type"`
-			OAuth                map[string]string `json:"oauth"`
-			IMAP                 []map[string]any  `json:"imap"`
-			SMTP                 []map[string]any  `json:"smtp"`
-			ReplyTo              string            `json:"reply_to"`
-			EnablePlusAddressing bool              `json:"enable_plus_addressing"`
+			AuthType             string               `json:"auth_type"`
+			OAuth                map[string]string    `json:"oauth"`
+			IMAP                 []map[string]any     `json:"imap"`
+			SMTP                 []map[string]any     `json:"smtp"`
+			ReplyTo              string               `json:"reply_to"`
+			EnablePlusAddressing bool                 `json:"enable_plus_addressing"`
+			EmailAliases         []imodels.EmailAlias `json:"email_aliases"`
 		}
 		var updateCfg struct {
-			AuthType             string            `json:"auth_type"`
-			OAuth                map[string]string `json:"oauth"`
-			IMAP                 []map[string]any  `json:"imap"`
-			SMTP                 []map[string]any  `json:"smtp"`
-			ReplyTo              string            `json:"reply_to"`
-			EnablePlusAddressing bool              `json:"enable_plus_addressing"`
+			AuthType             string               `json:"auth_type"`
+			OAuth                map[string]string    `json:"oauth"`
+			IMAP                 []map[string]any     `json:"imap"`
+			SMTP                 []map[string]any     `json:"smtp"`
+			ReplyTo              string               `json:"reply_to"`
+			EnablePlusAddressing bool                 `json:"enable_plus_addressing"`
+			EmailAliases         []imodels.EmailAlias `json:"email_aliases"`
 		}
 
 		if err := json.Unmarshal(current.Config, &currentCfg); err != nil {
@@ -420,6 +422,12 @@ func (m *Manager) Update(id int, inbox imodels.Inbox) (imodels.Inbox, error) {
 					updateCfg.OAuth[k] = v
 				}
 			}
+		}
+
+		// Preserve aliases when an older client updates an inbox without sending
+		// the optional alias configuration.
+		if updateCfg.EmailAliases == nil && currentCfg.EmailAliases != nil {
+			updateCfg.EmailAliases = currentCfg.EmailAliases
 		}
 
 		updatedConfig, err := json.Marshal(updateCfg)

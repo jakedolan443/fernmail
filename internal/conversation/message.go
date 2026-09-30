@@ -526,7 +526,12 @@ func (m *Manager) QueueReply(media []mmodels.Media, inboxID, senderID, contactID
 		if len(to) == 0 {
 			return message, envelope.NewError(envelope.GeneralError, m.i18n.Ts("globals.messages.empty", "name", "`to`"), nil)
 		}
-		sourceID, err = stringutil.GenerateEmailMessageID(conversationUUID, inboxRecord.From)
+		sourceFrom := inboxRecord.From
+		if alias := m.emailAliasForConversationUUID(conversationUUID); alias != "" {
+			metaMap["email_alias"] = alias
+			sourceFrom = alias
+		}
+		sourceID, err = stringutil.GenerateEmailMessageID(conversationUUID, sourceFrom)
 		if err != nil {
 			m.lo.Error("error generating source message id", "error", err)
 			return models.Message{}, envelope.NewError(envelope.GeneralError, m.i18n.T("globals.messages.somethingWentWrong"), nil)
@@ -1136,16 +1141,20 @@ func (m *Manager) findOrCreateConversation(in models.IncomingMessage) (int, stri
 		m.lo.Debug("no conversation found with in-reply-to and references, creating new conversation", "in_reply_to", in.InReplyTo, "references", in.References)
 		lastMessage := stringutil.HTML2Text(in.Content)
 		lastMessageAt := time.Now()
+		conversationMeta := map[string]any{}
+		if in.EmailAlias != "" {
+			conversationMeta["email_alias"] = in.EmailAlias
+		}
 		conversationID, conversationUUID, err = m.CreateConversation(in.Contact.ID,
 			in.InboxID,
 			lastMessage,
 			lastMessageAt,
 			in.Subject,
-			false, /**append reference number to subject**/
-			nil,   /** meta **/
-			nil,   /** customer attributes **/
-			0,     /** max conversation **/
-			0,     /** rate limit window **/
+			false,            /**append reference number to subject**/
+			conversationMeta, /** meta **/
+			nil,              /** customer attributes **/
+			0,                /** max conversation **/
+			0,                /** rate limit window **/
 		)
 		if err != nil || conversationID == 0 {
 			return 0, "", false, err
@@ -1364,6 +1373,13 @@ func (m *Manager) findExistingMedia(rawContentID, conversationUUID string) (stri
 // Falls back to the inbox's default from address if the template is empty, the sender is not an agent, or any errors occur.
 func (m *Manager) emailFromAddress(inb inbox.Inbox, message models.Message) string {
 	from := inb.FromAddress()
+	alias := emailAliasFromMessageMeta(message.Meta)
+	if alias == "" {
+		alias = m.emailAliasForConversationID(message.ConversationID)
+	}
+	if alias != "" {
+		from = alias
+	}
 
 	tpl := inb.FromNameTemplate()
 	if tpl == "" || message.SenderType != models.SenderTypeAgent {
@@ -1414,4 +1430,40 @@ func (m *Manager) emailFromAddress(inb inbox.Inbox, message models.Message) stri
 	}
 	addr.Name = name
 	return addr.String()
+}
+
+func emailAliasFromMessageMeta(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var meta map[string]any
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return ""
+	}
+	alias, _ := meta["email_alias"].(string)
+	return strings.TrimSpace(alias)
+}
+
+func (m *Manager) emailAliasForConversationID(conversationID int) string {
+	if conversationID <= 0 {
+		return ""
+	}
+	var alias string
+	if err := m.db.Get(&alias, `SELECT COALESCE(meta->>'email_alias', '') FROM conversations WHERE id=$1`, conversationID); err != nil {
+		m.lo.Error("error fetching conversation email alias", "conversation_id", conversationID, "error", err)
+		return ""
+	}
+	return alias
+}
+
+func (m *Manager) emailAliasForConversationUUID(conversationUUID string) string {
+	if conversationUUID == "" {
+		return ""
+	}
+	var alias string
+	if err := m.db.Get(&alias, `SELECT COALESCE(meta->>'email_alias', '') FROM conversations WHERE uuid=$1`, conversationUUID); err != nil {
+		m.lo.Error("error fetching conversation email alias", "conversation_uuid", conversationUUID, "error", err)
+		return ""
+	}
+	return alias
 }

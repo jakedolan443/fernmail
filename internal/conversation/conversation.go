@@ -61,7 +61,36 @@ const (
 )
 
 var ListFilterRenderers = dbutil.FieldRenderers{
-	"conversations": {},
+	"conversations": {
+		"email_alias": renderEmailAliasFilter,
+	},
+}
+
+func renderEmailAliasFilter(operator, value string, paramIndex int) (string, []any, error) {
+	field := "COALESCE(conversations.meta->>'email_alias', '')"
+	if operator == "set" {
+		return field + " <> ''", nil, nil
+	}
+	if operator == "not set" {
+		return field + " = ''", nil, nil
+	}
+	if strings.TrimSpace(value) == "" {
+		return "", nil, fmt.Errorf("operator %q requires a value", operator)
+	}
+
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch operator {
+	case "equals":
+		return fmt.Sprintf("%s = $%d", field, paramIndex), []any{value}, nil
+	case "not equals":
+		return fmt.Sprintf("%s != $%d", field, paramIndex), []any{value}, nil
+	case "contains":
+		return fmt.Sprintf("%s ILIKE $%d ESCAPE '\\'", field, paramIndex), []any{dbutil.ContainsPattern(value)}, nil
+	case "not contains":
+		return fmt.Sprintf("%s NOT ILIKE $%d ESCAPE '\\'", field, paramIndex), []any{dbutil.ContainsPattern(value)}, nil
+	default:
+		return "", nil, fmt.Errorf("unsupported email alias operator: %s", operator)
+	}
 }
 
 var ListFilterAllowedFields = dbutil.AllowedFields{
