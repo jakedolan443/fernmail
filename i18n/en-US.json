@@ -1633,7 +1633,6 @@
   "toast.inboxConnected": "Inbox connected successfully",
   "toast.inboxReconnected": "Inbox reconnected successfully",
   "toast.noNotificationsFound": "No notifications found",
-  "update.newUpdateAvailable": "A new update is available",
   "user.accountDisabled": "Your account is disabled, Please contact administrator",
   "user.cannotDeleteSystemUser": "Cannot delete system user",
   "user.invalidEmailPassword": "Invalid email or password.",

@@ -927,7 +927,6 @@
   "toast.inboxConnected": "Indbakke forbundet",
   "toast.inboxReconnected": "Indbakke genforbundet",
   "toast.noNotificationsFound": "Ingen notifikationer fundet",
-  "update.newUpdateAvailable": "En ny opdatering er tilgængelig",
   "user.accountDisabled": "Kontoen er deaktiveret. Kontakt venligst administratoren",
   "user.cannotDeleteSystemUser": "Kan ikke slette systembruger",
   "user.invalidEmailPassword": "Ugyldig e-mail eller adgangskode.",

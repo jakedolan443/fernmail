@@ -4,8 +4,6 @@ log_level = "debug"
 # Environment: dev, prod.
 # Setting to "dev" will enable color logging in terminal.
 env = "dev"
-# Whether to automatically check for application updates on start up, app updates are shown as a banner in the admin panel.
-check_updates = true
 # Encryption key. Generate using `openssl rand -hex 16` must be 32 characters long.
 encryption_key = "your-32-char-random-string-here!"
 # Path to a directory with custom static files and templates to override the defaults.

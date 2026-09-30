@@ -1467,7 +1467,6 @@
   "toast.inboxConnected": "Boîte de réception connectée avec succès",
   "toast.inboxReconnected": "Boîte de réception reconnectée avec succès",
   "toast.noNotificationsFound": "Aucune notification trouvée",
-  "update.newUpdateAvailable": "Une nouvelle mise à jour est disponible",
   "user.accountDisabled": "Votre compte est désactivé, veuillez contacter l'administrateur",
   "user.cannotDeleteSystemUser": "Impossible de supprimer l'utilisateur du système",
   "user.invalidEmailPassword": "E-mail ou mot de passe incorrect.",

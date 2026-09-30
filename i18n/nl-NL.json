@@ -1000,7 +1000,6 @@
   "toast.inboxConnected": "Inbox succesvol verbonden",
   "toast.inboxReconnected": "Inbox succesvol opnieuw verbonden",
   "toast.noNotificationsFound": "Geen meldingen gevonden",
-  "update.newUpdateAvailable": "Er is een nieuwe update beschikbaar",
   "user.accountDisabled": "Je account is uitgeschakeld. Neem contact op met de beheerder",
   "user.cannotDeleteSystemUser": "Kan systeemgebruiker niet verwijderen",
   "user.invalidEmailPassword": "Ongeldig e-mailadres of wachtwoord.",

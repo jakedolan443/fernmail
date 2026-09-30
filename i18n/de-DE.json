@@ -867,7 +867,6 @@
   "toast.inboxConnected": "Posteingang erfolgreich verbunden",
   "toast.inboxReconnected": "Posteingang erfolgreich neu verbunden",
   "toast.noNotificationsFound": "Keine Benachrichtigungen gefunden",
-  "update.newUpdateAvailable": "Ein neues Update ist verfügbar",
   "user.accountDisabled": "Dein Konto ist deaktiviert, bitte kontaktiere den Administrator",
   "user.cannotDeleteSystemUser": "Systembenutzer kann nicht gelöscht werden",
   "user.invalidEmailPassword": "Ungültige E-Mail oder Passwort.",

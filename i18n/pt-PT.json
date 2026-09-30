@@ -946,7 +946,6 @@
   "toast.inboxConnected": "Caixa de entrada conectada com sucesso",
   "toast.inboxReconnected": "Caixa de entrada reconectada com sucesso",
   "toast.noNotificationsFound": "Nenhuma notificação encontrada",
-  "update.newUpdateAvailable": "Uma nova atualização está disponível",
   "user.accountDisabled": "Sua conta está desabilitada, por favor contate o administrador",
   "user.cannotDeleteSystemUser": "Não é possível excluir usuário do sistema",
   "user.invalidEmailPassword": "Email ou senha inválidos.",

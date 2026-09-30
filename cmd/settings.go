@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-
 	"strings"
 
 	"github.com/jakedolan443/fernmail/internal/envelope"
@@ -22,14 +21,11 @@ func handleGetGeneralSettings(r *fastglue.Request) error {
 	if err != nil {
 		return sendErrorEnvelope(r, err)
 	}
-	// Unmarshal to set the app.update to the settings, so the frontend can show that an update is available.
 	var settings map[string]interface{}
 	if err := json.Unmarshal(out, &settings); err != nil {
 		app.lo.Error("error unmarshalling settings", "err", err)
 		return sendErrorEnvelope(r, envelope.NewError(envelope.GeneralError, app.i18n.T("globals.messages.somethingWentWrong"), nil))
 	}
-	// Set the app.update to the settings, adding `app` prefix to the key to match the settings structure in db.
-	settings["app.update"] = app.update
 	// Set app version.
 	settings["app.version"] = versionString
 	// Set restart required flag.

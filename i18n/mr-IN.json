@@ -946,7 +946,6 @@
   "toast.inboxConnected": "इनबॉक्स यशस्वीरित्या जोडला",
   "toast.inboxReconnected": "इनबॉक्स यशस्वीरित्या पुन्हा जोडला",
   "toast.noNotificationsFound": "सूचना सापडल्या नाहीत",
-  "update.newUpdateAvailable": "नवीन अपडेट उपलब्ध आहे",
   "user.accountDisabled": "तुमचे खाते अक्षम केले आहे, कृपया प्रशासकाशी संपर्क साधा",
   "user.cannotDeleteSystemUser": "सिस्टम वापरकर्ता हटवू शकत नाही",
   "user.invalidEmailPassword": "अवैध ईमेल किंवा पासवर्ड.",

@@ -943,7 +943,6 @@
   "toast.inboxConnected": "Bandeja de entrada conectada correctamente",
   "toast.inboxReconnected": "Bandeja de entrada reconectada correctamente",
   "toast.noNotificationsFound": "No se encontraron notificaciones",
-  "update.newUpdateAvailable": "Hay una nueva actualización disponible",
   "user.accountDisabled": "Tu cuenta está deshabilitada. Por favor contacta al administrador",
   "user.cannotDeleteSystemUser": "No se puede eliminar el usuario del sistema",
   "user.invalidEmailPassword": "Correo electrónico o contraseña no válidos.",

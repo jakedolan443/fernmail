@@ -1,7 +1,6 @@
 [app]
 log_level = "info"
 env = "prod"
-check_updates = true
 encryption_key = "__ENCRYPTION_KEY__"
 
 [app.server]

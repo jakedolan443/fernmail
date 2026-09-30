@@ -117,8 +117,6 @@ type App struct {
 	importer       *importer.Importer
 	wsHub          *ws.Hub
 
-	// Global state that stores data on an available app update.
-	update *AppUpdate
 	// Flag to indicate if app restart is required for settings to take effect.
 	restartRequired bool
 	sync.Mutex
@@ -314,11 +312,6 @@ func main() {
 			log.Fatalf("error starting server: %v", err)
 		}
 	}()
-
-	// Start the app update checker.
-	if ko.Bool("app.check_updates") {
-		go checkUpdates(versionString, time.Hour*1, app)
-	}
 
 	// Wait for shutdown signal.
 	<-ctx.Done()

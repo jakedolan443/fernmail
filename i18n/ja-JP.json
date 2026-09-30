@@ -933,7 +933,6 @@
   "toast.inboxConnected": "受信トレイを接続しました",
   "toast.inboxReconnected": "受信トレイを再接続しました",
   "toast.noNotificationsFound": "通知が見つかりません",
-  "update.newUpdateAvailable": "新しいアップデートが利用可能です",
   "user.accountDisabled": "アカウントが無効になっています。管理者に問い合わせてください",
   "user.cannotDeleteSystemUser": "システムユーザーは削除できません",
   "user.invalidEmailPassword": "メールアドレス かパスワードが無効です。",

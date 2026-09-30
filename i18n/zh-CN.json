@@ -1025,7 +1025,6 @@
   "toast.inboxConnected": "收件箱连接成功",
   "toast.inboxReconnected": "收件箱重新连接成功",
   "toast.noNotificationsFound": "未找到通知",
-  "update.newUpdateAvailable": "有新更新可用",
   "user.accountDisabled": "您的帐户已禁用，请联系管理员",
   "user.cannotDeleteSystemUser": "无法删除系统用户",
   "user.invalidEmailPassword": "电子邮件或密码无效。",

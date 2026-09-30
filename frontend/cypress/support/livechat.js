@@ -299,7 +299,6 @@ Cypress.Commands.add('setDefaultBusinessHours', (businessHoursId) =>
   cy.api('GET', '/api/v1/settings/general').then(({ body }) => {
     const settings = { ...body.data, 'app.business_hours_id': businessHoursId }
     delete settings['app.version']
-    delete settings['app.update']
     delete settings['app.restart_required']
     return cy.api('PUT', '/api/v1/settings/general', settings).its('status').should('eq', 200)
   })

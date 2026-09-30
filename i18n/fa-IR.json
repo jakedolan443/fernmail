@@ -943,7 +943,6 @@
   "toast.inboxConnected": "صندوق ورودی با موفقیت متصل شد",
   "toast.inboxReconnected": "صندوق ورودی با موفقیت مجدداً متصل شد",
   "toast.noNotificationsFound": "اعلانی یافت نشد",
-  "update.newUpdateAvailable": "به‌روزرسانی جدیدی در دسترس است",
   "user.accountDisabled": "حساب شما غیرفعال است، لطفاً با مدیر تماس بگیرید",
   "user.cannotDeleteSystemUser": "نمی‌توان کاربر سیستمی را حذف کرد",
   "user.invalidEmailPassword": "ایمیل یا رمز عبور نامعتبر.",
