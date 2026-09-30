@@ -151,12 +151,6 @@ const createUser = (data) =>
     }
   })
 
-const createConversation = (data) =>
-  http.post('/api/v1/conversations', data, {
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  })
 const updateConversationStatus = (uuid, data) =>
   http.put(`/api/v1/conversations/${uuid}/status`, data, {
     headers: {
@@ -188,14 +182,17 @@ const getConversation = (uuid) => http.get(`/api/v1/conversations/${uuid}`, { ab
 const getConversationTranscript = (uuid) =>
   http.get(`/api/v1/conversations/${uuid}/transcript`, { responseType: 'blob' })
 
-const getAllConversations = (params) =>
-  http.get('/api/v1/conversations/all', { params, abortOnRoute: true })
-const getMentionedConversations = (params) =>
-  http.get('/api/v1/conversations/mentioned', { params, abortOnRoute: true })
+const getAddresses = () => http.get('/api/v1/addresses')
+const getAddressConversations = (id, params) =>
+  http.get(`/api/v1/addresses/${id}/conversations`, { params, abortOnRoute: true })
 const getSidebarCounts = () => http.get('/api/v1/conversations/sidebar-counts')
-const getViewCount = (id) => http.get(`/api/v1/views/${id}/count`)
-const getViewConversations = (id, params) =>
-  http.get(`/api/v1/views/${id}/conversations`, { params, abortOnRoute: true })
+const getAdminAddresses = () => http.get('/api/v1/admin/addresses')
+const getAddressPrincipals = () => http.get('/api/v1/admin/address-principals')
+const getAdminAddress = (id) => http.get(`/api/v1/admin/addresses/${id}`)
+const getAddressAccess = (id) => http.get(`/api/v1/admin/addresses/${id}/access`)
+const createAddress = (data) => http.post('/api/v1/admin/addresses', data)
+const updateAddress = (id, data) => http.put(`/api/v1/admin/addresses/${id}`, data)
+const deleteAddress = (id) => http.delete(`/api/v1/admin/addresses/${id}`)
 const uploadMedia = (data) =>
   http.post('/api/v1/media', data, {
     headers: {
@@ -211,11 +208,6 @@ const createInbox = (data) =>
       'Content-Type': 'application/json'
     }
   })
-const getMailboxes = () => http.get('/api/v1/mailboxes')
-const getMailboxConversations = (id, params) =>
-  http.get(`/api/v1/mailboxes/${id}/conversations`, { params })
-const getInboxAccess = (id) => http.get(`/api/v1/inboxes/${id}/access`)
-const updateInboxAccess = (id, data) => http.put(`/api/v1/inboxes/${id}/access`, data)
 const getInboxes = () => http.get('/api/v1/inboxes')
 const getInbox = (id) => http.get(`/api/v1/inboxes/${id}`)
 const toggleInbox = (id) => http.put(`/api/v1/inboxes/${id}/toggle`)
@@ -241,38 +233,6 @@ const getAllDrafts = () => http.get('/api/v1/drafts')
 
 const deleteDraft = (uuid, type) =>
   http.delete(`/api/v1/conversations/${uuid}/draft`, { params: { type } })
-const getCurrentUserViews = () => http.get('/api/v1/views/me')
-const createView = (data) =>
-  http.post('/api/v1/views/me', data, {
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  })
-const updateView = (id, data) =>
-  http.put(`/api/v1/views/me/${id}`, data, {
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  })
-const deleteView = (id) => http.delete(`/api/v1/views/me/${id}`)
-
-const getSharedViews = () => http.get('/api/v1/views/shared')
-const getAllSharedViews = () => http.get('/api/v1/shared-views')
-const getSharedView = (id) => http.get(`/api/v1/shared-views/${id}`)
-const createSharedView = (data) =>
-  http.post('/api/v1/shared-views', data, {
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  })
-const updateSharedView = (id, data) =>
-  http.put(`/api/v1/shared-views/${id}`, data, {
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  })
-const deleteSharedView = (id) => http.delete(`/api/v1/shared-views/${id}`)
-
 const getWebhooksCompact = () => http.get('/api/v1/webhooks/compact')
 const getWebhooks = () => http.get('/api/v1/webhooks')
 const getWebhook = (id) => http.get(`/api/v1/webhooks/${id}`)
@@ -326,20 +286,20 @@ export default {
   getUsers,
   getInbox,
   getInboxes,
-  getMailboxes,
-  getMailboxConversations,
-  getInboxAccess,
-  updateInboxAccess,
   getLanguage,
   getAvailableLanguages,
   getConversation,
 
-  getAllConversations,
-  getMentionedConversations,
+  getAddresses,
+  getAddressConversations,
   getSidebarCounts,
-  getViewCount,
-
-  getViewConversations,
+  getAdminAddresses,
+  getAddressPrincipals,
+  getAdminAddress,
+  getAddressAccess,
+  createAddress,
+  updateAddress,
+  deleteAddress,
 
   getConversationMessage,
   allowMessageImages,
@@ -357,7 +317,6 @@ export default {
   updateUser,
   updateCurrentUserAvailability,
 
-  createConversation,
   sendMessage,
   retryMessage,
   deleteMessage,
@@ -395,17 +354,6 @@ export default {
   saveDraft,
   getAllDrafts,
   deleteDraft,
-  getCurrentUserViews,
-  createView,
-  updateView,
-  deleteView,
-  getSharedViews,
-  getAllSharedViews,
-  getSharedView,
-  createSharedView,
-  updateSharedView,
-  deleteSharedView,
-
   searchConversations,
   searchMessages,
 

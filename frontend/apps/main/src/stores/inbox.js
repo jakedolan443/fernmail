@@ -22,7 +22,9 @@ export const useInboxStore = defineStore('inbox', () => {
   const fetchInboxes = async (force = false) => {
     if (!force && inboxes.value.length) return
     try {
-      const response = await api.getMailboxes()
+      // Transport records are an administration concern. User-facing routing
+      // is handled exclusively by the address store.
+      const response = await api.getInboxes()
       inboxes.value = response?.data?.data || []
     } catch (error) {
       emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {

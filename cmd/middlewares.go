@@ -239,7 +239,7 @@ func notAuthPage(handler fastglue.FastRequestHandler) fastglue.FastRequestHandle
 		if user.ID != 0 {
 			nextURI := string(r.RequestCtx.QueryArgs().Peek("next"))
 			if nextURI == "" {
-				nextURI = "/inboxes/all"
+				nextURI = "/addresses"
 			}
 			return r.RedirectURI(nextURI, fasthttp.StatusFound, nil, "")
 		}

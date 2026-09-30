@@ -15,9 +15,9 @@
             ? 'text-success hover:text-success'
             : 'text-muted-foreground hover:text-foreground'
         "
-        :aria-label="isSettings ? 'Back to mailbox' : 'Settings'"
-        :title="isSettings ? 'Back to mailbox' : 'Settings'"
-        @click="router.push(isSettings ? '/inboxes/all' : '/admin/general')"
+        :aria-label="isSettings ? 'Back to addresses' : 'Settings'"
+        :title="isSettings ? 'Back to addresses' : 'Settings'"
+        @click="router.push(isSettings ? '/addresses' : '/admin/general')"
       >
         <ArrowLeft v-if="isSettings" class="h-4 w-4" aria-hidden="true" />
         <Settings v-else class="h-4 w-4" aria-hidden="true" />

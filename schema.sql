@@ -9,7 +9,6 @@ DROP TYPE IF EXISTS "conversation_assignment_type" CASCADE; CREATE TYPE "convers
 DROP TYPE IF EXISTS "template_type" CASCADE; CREATE TYPE "template_type" AS ENUM ('email_outgoing');
 -- Visitors are unauthenticated contacts.
 DROP TYPE IF EXISTS "user_type" CASCADE; CREATE TYPE "user_type" AS ENUM ('agent', 'contact', 'visitor', 'ai_assistant');
-DROP TYPE IF EXISTS "view_visibility" CASCADE; CREATE TYPE "view_visibility" AS ENUM ('all', 'team', 'user');
 DROP TYPE IF EXISTS "media_disposition" CASCADE; CREATE TYPE "media_disposition" AS ENUM ('inline', 'attachment');
 DROP TYPE IF EXISTS "media_store" CASCADE; CREATE TYPE "media_store" AS ENUM ('s3', 'fs');
 DROP TYPE IF EXISTS "user_availability_status" CASCADE; CREATE TYPE "user_availability_status" AS ENUM ('online', 'away', 'away_manual', 'offline', 'away_and_reassigning');
@@ -222,6 +221,76 @@ RETURNS BOOLEAN LANGUAGE SQL STABLE AS $$
     );
 $$;
 
+-- Addresses are the user-facing mail endpoints. A mailbox owns an IMAP/SMTP
+-- transport inbox; an alias deliberately shares one. Keeping the endpoint
+-- separate from the transport lets permissions, routing, and reply identity
+-- agree without polling an alias more than once.
+DROP TABLE IF EXISTS email_address_teams, email_address_users, email_addresses CASCADE;
+CREATE TABLE email_addresses (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    inbox_id INTEGER NOT NULL REFERENCES inboxes(id) ON DELETE CASCADE,
+    address TEXT NOT NULL,
+    display_name TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT 'alias' CHECK (kind IN ('mailbox', 'alias')),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    restricted BOOLEAN NOT NULL DEFAULT TRUE,
+    CONSTRAINT constraint_email_addresses_address CHECK (length(address) <= 320),
+    CONSTRAINT constraint_email_addresses_display_name CHECK (length(display_name) <= 140)
+);
+CREATE UNIQUE INDEX index_email_addresses_on_normalized_address ON email_addresses (lower(address));
+CREATE UNIQUE INDEX index_email_addresses_one_mailbox_per_inbox
+    ON email_addresses (inbox_id) WHERE kind = 'mailbox';
+CREATE INDEX index_email_addresses_on_inbox_id ON email_addresses(inbox_id);
+
+CREATE TABLE email_address_users (
+    address_id INTEGER NOT NULL REFERENCES email_addresses(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (address_id, user_id)
+);
+CREATE TABLE email_address_teams (
+    address_id INTEGER NOT NULL REFERENCES email_addresses(id) ON DELETE CASCADE,
+    team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    PRIMARY KEY (address_id, team_id)
+);
+CREATE INDEX index_email_address_users_on_user_id ON email_address_users(user_id);
+CREATE INDEX index_email_address_teams_on_team_id ON email_address_teams(team_id);
+
+-- Address policies are the sole user-facing access control. The IMAP/SMTP
+-- transport is implementation detail, so a hidden transport policy can never
+-- override an explicit Address grant.
+CREATE OR REPLACE FUNCTION can_access_email_address(target_address INTEGER, viewer BIGINT)
+RETURNS BOOLEAN LANGUAGE SQL STABLE AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM email_addresses a
+        JOIN inboxes i ON i.id = a.inbox_id
+            AND i.channel = 'email'
+            AND i.deleted_at IS NULL
+        JOIN users u ON u.id = viewer AND u.type = 'agent' AND u.enabled AND u.deleted_at IS NULL
+        WHERE a.id = target_address
+          AND (
+              NOT a.restricted
+              OR u.email = 'System'
+              OR EXISTS (
+                  SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+                  WHERE ur.user_id = viewer AND r.name = 'Admin'
+              )
+              OR EXISTS (
+                  SELECT 1 FROM email_address_users eau
+                  WHERE eau.address_id = a.id AND eau.user_id = viewer
+              )
+              OR EXISTS (
+                  SELECT 1
+                  FROM email_address_teams eat
+                  JOIN team_members tm ON tm.team_id = eat.team_id
+                  WHERE eat.address_id = a.id AND tm.user_id = viewer
+              )
+          )
+    );
+$$;
+
 DROP TABLE IF EXISTS conversation_statuses CASCADE;
 CREATE TABLE conversation_statuses (
 	id SERIAL PRIMARY KEY,
@@ -251,6 +320,10 @@ CREATE TABLE conversations (
 
     -- Cascade deletes when inbox is deleted.
 	inbox_id INT REFERENCES inboxes(id) ON DELETE CASCADE ON UPDATE CASCADE NOT NULL,
+
+	-- Email addresses are the visible communication endpoints. This remains
+	-- nullable for non-email channels.
+	address_id INT REFERENCES email_addresses(id) ON DELETE SET NULL ON UPDATE CASCADE,
 
 	-- Restrict delete.
 	status_id INT REFERENCES conversation_statuses(id) ON DELETE RESTRICT ON UPDATE CASCADE NOT NULL,
@@ -283,6 +356,7 @@ CREATE INDEX index_conversations_on_assigned_team_id ON conversations (assigned_
 CREATE INDEX index_conversations_on_snoozed_until ON conversations (snoozed_until);
 CREATE INDEX index_conversations_on_contact_id ON conversations (contact_id);
 CREATE INDEX index_conversations_on_inbox_id ON conversations (inbox_id);
+CREATE INDEX index_conversations_on_address_id ON conversations (address_id);
 CREATE INDEX index_conversations_on_status_id ON conversations (status_id);
 CREATE INDEX index_conversations_on_priority_id ON conversations (priority_id);
 CREATE INDEX index_conversations_on_created_at ON conversations (created_at);
@@ -472,25 +546,6 @@ CREATE TABLE templates (
 CREATE UNIQUE INDEX index_unique_templates_on_is_default_when_is_default_is_true ON templates USING btree (is_default)
 WHERE (is_default = true);
 
-DROP TABLE IF EXISTS views CASCADE;
-CREATE TABLE views (
-    id SERIAL PRIMARY KEY,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    name TEXT NOT NULL,
-    filters JSONB NOT NULL,
-    visibility view_visibility NOT NULL DEFAULT 'user',
-    -- Delete user views when user / team is deleted.
-    user_id BIGINT REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
-    team_id BIGINT REFERENCES teams(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT constraint_views_on_name CHECK (length(name) <= 140),
-    CONSTRAINT constraint_views_visibility_user CHECK (visibility != 'user' OR user_id IS NOT NULL),
-    CONSTRAINT constraint_views_visibility_team CHECK (visibility != 'team' OR team_id IS NOT NULL)
-);
-CREATE INDEX index_views_on_user_id ON views(user_id);
-CREATE INDEX index_views_on_visibility ON views(visibility);
-CREATE INDEX index_views_on_team_id ON views(team_id);
-
 DROP TABLE IF EXISTS webhooks CASCADE;
 CREATE TABLE webhooks (
 	id SERIAL PRIMARY KEY,
@@ -553,7 +608,7 @@ VALUES
 	(
 		'Agent',
 		'Role for all agents with limited access to conversations.',
-		'{conversations:read_all,conversations:read,conversations:update_status,messages:read,messages:write,messages:write_private,view:manage,conversations:write}'
+		'{conversations:read_all,conversations:read,conversations:update_status,messages:read,messages:write,messages:write_private}'
 	);
 
 INSERT INTO
@@ -562,5 +617,5 @@ VALUES
 	(
 		'Admin',
 		'Role for users who have complete access to everything.',
-		'{webhooks:manage,conversations:write,general_settings:manage,oidc:manage,conversations:read_all,conversations:read,conversations:update_status,messages:read,messages:write,messages:write_private,view:manage,shared_views:manage,status:manage,users:manage,inboxes:manage,templates:manage}'
+		'{webhooks:manage,general_settings:manage,oidc:manage,conversations:read_all,conversations:read,conversations:update_status,messages:read,messages:write,messages:write_private,status:manage,users:manage,inboxes:manage,templates:manage}'
 	);

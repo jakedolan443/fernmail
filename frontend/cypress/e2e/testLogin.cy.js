@@ -92,8 +92,8 @@ describe('Login Component', () => {
         // Wait for API call
         cy.wait('@loginSuccess')
 
-        // Verify redirection to inboxes page
-        cy.url().should('include', '/inboxes/assigned')
+        // Verify redirection to the address workspace.
+        cy.url().should('include', '/addresses')
     })
 
     it('should validate email format', () => {

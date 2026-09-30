@@ -50,7 +50,7 @@ var (
 	efs                             embed.FS
 	errConversationNotFound         = errors.New("conversation not found")
 	ErrConversationAlreadyAssigned  = errors.New("conversation already assigned")
-	conversationsAllowedFields      = []string{"status_id", "inbox_id", "last_message_at", "last_interaction_at", "last_interaction_sender", "created_at", "waiting_since", "snoozed_until"}
+	conversationsAllowedFields      = []string{"status_id", "inbox_id", "address_id", "last_message_at", "last_interaction_at", "last_interaction_sender", "created_at", "waiting_since", "snoozed_until"}
 	conversationStatusAllowedFields = []string{"id", "name"}
 	usersAllowedFields              = []string{"email", "external_user_id"}
 	inboxesAllowedFields            = []string{"channel"}
@@ -60,38 +60,10 @@ const (
 	conversationsListMaxPageSize = 500
 )
 
-var ListFilterRenderers = dbutil.FieldRenderers{
-	"conversations": {
-		"email_alias": renderEmailAliasFilter,
-	},
-}
-
-func renderEmailAliasFilter(operator, value string, paramIndex int) (string, []any, error) {
-	field := "COALESCE(conversations.meta->>'email_alias', '')"
-	if operator == "set" {
-		return field + " <> ''", nil, nil
-	}
-	if operator == "not set" {
-		return field + " = ''", nil, nil
-	}
-	if strings.TrimSpace(value) == "" {
-		return "", nil, fmt.Errorf("operator %q requires a value", operator)
-	}
-
-	value = strings.ToLower(strings.TrimSpace(value))
-	switch operator {
-	case "equals":
-		return fmt.Sprintf("%s = $%d", field, paramIndex), []any{value}, nil
-	case "not equals":
-		return fmt.Sprintf("%s != $%d", field, paramIndex), []any{value}, nil
-	case "contains":
-		return fmt.Sprintf("%s ILIKE $%d ESCAPE '\\'", field, paramIndex), []any{dbutil.ContainsPattern(value)}, nil
-	case "not contains":
-		return fmt.Sprintf("%s NOT ILIKE $%d ESCAPE '\\'", field, paramIndex), []any{dbutil.ContainsPattern(value)}, nil
-	default:
-		return "", nil, fmt.Errorf("unsupported email alias operator: %s", operator)
-	}
-}
+// ListFilterRenderers remains a stable integration point for generic list and
+// search filtering. Address routing is now a database field, not a legacy
+// metadata renderer.
+var ListFilterRenderers = dbutil.FieldRenderers{}
 
 var ListFilterAllowedFields = dbutil.AllowedFields{
 	"conversations":         conversationsAllowedFields,
@@ -233,8 +205,6 @@ type queries struct {
 	GetConversationsCreatedAfter      *sqlx.Stmt `query:"get-conversations-created-after"`
 	GetConversations                  string     `query:"get-conversations"`
 	GetConversationParticipants       *sqlx.Stmt `query:"get-conversation-participants"`
-	GetSidebarStandardCounts          *sqlx.Stmt `query:"get-sidebar-standard-counts"`
-	GetConversationsCountBase         string     `query:"get-conversations-count-base"`
 	StartConversationWaitingSince     *sqlx.Stmt `query:"start-conversation-waiting-since"`
 	UpdateConversationReplyTimestamps *sqlx.Stmt `query:"update-conversation-reply-timestamps"`
 	UpdateConversationContactLastSeen *sqlx.Stmt `query:"update-conversation-contact-last-seen"`
@@ -279,7 +249,7 @@ type queries struct {
 
 // CreateConversation creates a new conversation. If maxConversations > 0, the insert is
 // atomically rejected when the contact already has >= maxConversations in the given window.
-func (c *Manager) CreateConversation(contactID, inboxID int, lastMessage string, lastMessageAt time.Time, subject string, appendRefNumToSubject bool, meta, customAttributes map[string]any, maxConversations int, rateLimitWindow time.Duration) (int, string, error) {
+func (c *Manager) CreateConversation(contactID, inboxID, addressID int, lastMessage string, lastMessageAt time.Time, subject string, appendRefNumToSubject bool, meta, customAttributes map[string]any, maxConversations int, rateLimitWindow time.Duration) (int, string, error) {
 	var (
 		id     int
 		uuid   string
@@ -309,7 +279,7 @@ func (c *Manager) CreateConversation(contactID, inboxID int, lastMessage string,
 		since = time.Now().Add(-rateLimitWindow)
 	}
 
-	if err := c.q.InsertConversation.QueryRow(contactID, models.StatusOpen, inboxID, lastMessage, lastMessageAt, subject, prefix, appendRefNumToSubject, metaJSON, customAttrsJSON, since, maxConversations, c.subjectRefFormat).Scan(&id, &uuid); err != nil {
+	if err := c.q.InsertConversation.QueryRow(contactID, models.StatusOpen, inboxID, lastMessage, lastMessageAt, subject, prefix, appendRefNumToSubject, metaJSON, customAttrsJSON, since, maxConversations, c.subjectRefFormat, addressID).Scan(&id, &uuid); err != nil {
 		if err == sql.ErrNoRows {
 			return 0, "", envelope.NewError(envelope.RateLimitError, c.i18n.T("globals.messages.tooManyRequests"), nil)
 		}
@@ -435,16 +405,6 @@ func (c *Manager) GetConversationUUID(id int) (string, error) {
 	return uuid, nil
 }
 
-// GetAllConversationsList retrieves all conversations with optional filtering, ordering, and pagination.
-func (c *Manager) GetAllConversationsList(viewingUserID int, order, orderBy, filters string, page, pageSize int) ([]models.ConversationListItem, error) {
-	return c.GetConversations(viewingUserID, 0, []int{}, []string{models.AllConversations}, order, orderBy, filters, page, pageSize)
-}
-
-// GetMentionedConversationsList retrieves conversations where the user is mentioned (directly or via team).
-func (c *Manager) GetMentionedConversationsList(viewingUserID int, order, orderBy, filters string, page, pageSize int) ([]models.ConversationListItem, error) {
-	return c.GetConversations(viewingUserID, 0, []int{}, []string{models.MentionedConversations}, order, orderBy, filters, page, pageSize)
-}
-
 // InsertMentions inserts mentions for a message.
 func (c *Manager) InsertMentions(conversationID, messageID, mentionedByUserID int, mentions []models.MentionInput) error {
 	for _, mention := range mentions {
@@ -464,10 +424,6 @@ func (c *Manager) InsertMentions(conversationID, messageID, mentionedByUserID in
 		}
 	}
 	return nil
-}
-
-func (c *Manager) GetViewConversationsList(viewingUserID, userID int, teamIDs []int, listType []string, order, orderBy, filters string, page, pageSize int) ([]models.ConversationListItem, error) {
-	return c.GetConversations(viewingUserID, userID, teamIDs, listType, order, orderBy, filters, page, pageSize)
 }
 
 // GetConversations retrieves conversations list based on user ID, type, and optional filtering, ordering, and pagination.
@@ -766,19 +722,6 @@ func (c *Manager) makeConversationsListQuery(viewingUserID, userID int, teamIDs 
 	}, filtersJSON, ListFilterAllowedFields, ListFilterRenderers)
 }
 
-// ValidateListFilters structurally validates a conversation view's filters payload.
-func (c *Manager) ValidateListFilters(filtersJSON string) error {
-	err := dbutil.ValidateFilters(filtersJSON, ListFilterAllowedFields, ListFilterRenderers)
-	if err == nil {
-		return nil
-	}
-	c.lo.Error("error validating view filters", "error", err)
-	if errors.Is(err, dbutil.ErrTooManyGroups) {
-		return envelope.NewError(envelope.InputError, c.i18n.Ts("conversation.filters.tooManyGroups", "max", fmt.Sprintf("%d", dbutil.MaxFilterGroups)), nil)
-	}
-	return envelope.NewError(envelope.InputError, c.i18n.T("globals.messages.invalidFilters"), nil)
-}
-
 func (c *Manager) GetConversationListItem(uuid string) (models.ConversationListItem, error) {
 	var item models.ConversationListItem
 	if err := c.q.GetConversationListItem.Get(&item, uuid); err != nil {
@@ -787,7 +730,7 @@ func (c *Manager) GetConversationListItem(uuid string) (models.ConversationListI
 	return item, nil
 }
 
-func (c *Manager) AuthorizedConnectedAgentIDs(assignedUserID, assignedTeamID null.Int, inboxID int) []int {
+func (c *Manager) AuthorizedConnectedAgentIDs(assignedUserID, assignedTeamID, addressID null.Int, inboxID int) []int {
 	connected := c.wsHub.ConnectedUserIDs()
 	if len(connected) == 0 {
 		return nil
@@ -802,7 +745,12 @@ func (c *Manager) AuthorizedConnectedAgentIDs(assignedUserID, assignedTeamID nul
 			continue
 		}
 		var allowed bool
-		if err := c.db.Get(&allowed, `SELECT can_access_inbox($1,$2)`, inboxID, id); err != nil || !allowed {
+		if addressID.Valid {
+			err = c.db.Get(&allowed, `SELECT can_access_email_address($1,$2)`, addressID.Int, id)
+		} else {
+			err = c.db.Get(&allowed, `SELECT can_access_inbox($1,$2)`, inboxID, id)
+		}
+		if err != nil || !allowed {
 			continue
 		}
 		if authz.CanReadAssignment(agent, assignedUserID, assignedTeamID) {
@@ -854,72 +802,4 @@ func (c *Manager) FilterLocation() string {
 		return ""
 	}
 	return tz
-}
-
-// appendListTypeConditions returns the SQL conditions for the list types, appending their bind parameters to args.
-func appendListTypeConditions(listTypes []string, viewingUserID, userID int, teamIDs []int, args *[]any) ([]string, error) {
-	// All is the union of all assignment scopes. Do this before adding any scope
-	// arguments so a mixed list cannot leave unused SQL parameters behind.
-	if slices.Contains(listTypes, models.AllConversations) {
-		*args = append(*args, viewingUserID)
-		return []string{fmt.Sprintf("can_access_inbox(conversations.inbox_id, $%d)", len(*args))}, nil
-	}
-	conditions := make([]string, 0, len(listTypes))
-	for _, lt := range listTypes {
-		switch lt {
-		case models.AssignedConversations:
-			*args = append(*args, userID)
-			conditions = append(conditions, fmt.Sprintf("conversations.assigned_user_id = $%d", len(*args)))
-		case models.UnassignedConversations:
-			conditions = append(conditions, "conversations.assigned_user_id IS NULL AND conversations.assigned_team_id IS NULL")
-		case models.TeamUnassignedConversations:
-			conditions = append(conditions, fmt.Sprintf("(conversations.assigned_team_id IN (%s) AND conversations.assigned_user_id IS NULL)", appendTeamIDArgs(teamIDs, args)))
-		case models.TeamAllConversations:
-			conditions = append(conditions, fmt.Sprintf("(conversations.assigned_team_id IN (%s))", appendTeamIDArgs(teamIDs, args)))
-		case models.AllConversations:
-			// No conditions needed for all conversations.
-		case models.MentionedConversations:
-			// Filter to only conversations where user is mentioned (directly or via team)
-			*args = append(*args, viewingUserID)
-			conditions = append(conditions, fmt.Sprintf(`conversations.id IN (
-				SELECT cm.conversation_id
-				FROM conversation_mentions cm
-				WHERE cm.mentioned_user_id = $%d
-				   OR EXISTS(
-					   SELECT 1 FROM team_members tm
-					   WHERE tm.team_id = cm.mentioned_team_id AND tm.user_id = $%d
-				   )
-			)`, len(*args), len(*args)))
-		default:
-			return nil, fmt.Errorf("unknown conversation type: %s", lt)
-		}
-	}
-
-	scope := "TRUE"
-	if len(conditions) > 0 {
-		scope = "(" + strings.Join(conditions, " OR ") + ")"
-	}
-	*args = append(*args, viewingUserID)
-	return []string{fmt.Sprintf("%s AND can_access_inbox(conversations.inbox_id, $%d)", scope, len(*args))}, nil
-}
-
-// appendTeamIDArgs appends team IDs to args and returns their placeholders, or NULL when there are none.
-func appendTeamIDArgs(teamIDs []int, args *[]any) string {
-	if len(teamIDs) == 0 {
-		return "NULL"
-	}
-	placeholders := make([]string, len(teamIDs))
-	for i, id := range teamIDs {
-		*args = append(*args, id)
-		placeholders[i] = fmt.Sprintf("$%d", len(*args))
-	}
-	return strings.Join(placeholders, ",")
-}
-
-// listTypeWhereClause ORs the conditions into an AND (...) clause for the base query.
-func listTypeWhereClause(conditions []string) string {
-	if len(conditions) == 0 {
-		return ""
-	}
-	return "AND (" + strings.Join(conditions, " OR ") + ")"
 }

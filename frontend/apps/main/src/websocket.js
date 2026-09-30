@@ -1,4 +1,5 @@
 import { useConversationStore } from './stores/conversation'
+import { useAddressStore } from './stores/address'
 
 import { useUsersStore } from './stores/users'
 import { useConnectionStore } from './stores/connection'
@@ -21,6 +22,7 @@ export class WebSocketClient {
     this.pingInterval = null
     this.lastPong = Date.now()
     this.convStore = useConversationStore()
+    this.addressStore = useAddressStore()
     this.browserNotifications = useBrowserNotificationsStore()
 
     this.usersStore = useUsersStore()
@@ -65,10 +67,6 @@ export class WebSocketClient {
     this.lastPong = Date.now()
     this.setupPing()
     this.flushMessageQueue()
-    if (wasReconnect && window.location.pathname.startsWith('/inboxes')) {
-      window.location.reload()
-      return
-    }
     if (wasReconnect) {
       this.convStore.fetchSidebarCounts({ force: true })
       // RESUB!
@@ -91,9 +89,10 @@ export class WebSocketClient {
 
       const data = JSON.parse(event.data)
       const handlers = {
-        mailbox_access_updated: () => {
-          this.browserNotifications.closeAll()
-          if (window.location.pathname.startsWith('/inboxes')) window.location.reload()
+        addresses_updated: () => {
+          this.addressStore.fetchAddresses(true)
+          this.convStore.fetchSidebarCounts({ force: true })
+          this.convStore.resetConversations()
         },
         [WS_EVENT.NEW_MESSAGE]: () => {
           const uuid = data.data.conversation_uuid
@@ -111,8 +110,12 @@ export class WebSocketClient {
             })
           }
 
-          if ((!isOpen || document.hidden) && this.convStore.isConversationInList(uuid)) {
-            this.convStore.incrementUnread(uuid)
+          if (!isOpen || document.hidden) {
+            if (this.convStore.isConversationInList(uuid)) {
+              this.convStore.incrementUnread(uuid)
+            } else if (convPayload?.address_id) {
+              this.convStore.incrementAddressUnread(convPayload.address_id)
+            }
           }
 
           if (!isOpen || document.hidden) this.convStore.sidebarCounts.unread++

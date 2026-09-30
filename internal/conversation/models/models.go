@@ -62,6 +62,7 @@ var (
 // ConversationListItem represents a conversation in list views
 type ConversationListItem struct {
 	InboxID               int                     `db:"inbox_id" json:"inbox_id"`
+	AddressID             null.Int                `db:"address_id" json:"address_id"`
 	Total                 int                     `db:"total" json:"-"`
 	ID                    int                     `db:"id" json:"id"`
 	CreatedAt             time.Time               `db:"created_at" json:"created_at"`
@@ -121,6 +122,7 @@ type Conversation struct {
 	UUID                      string                 `db:"uuid" json:"uuid"`
 	ContactID                 int                    `db:"contact_id" json:"-"`
 	InboxID                   int                    `db:"inbox_id" json:"inbox_id"`
+	AddressID                 null.Int               `db:"address_id" json:"address_id"`
 	ClosedAt                  null.Time              `db:"closed_at" json:"closed_at"`
 	ResolvedAt                null.Time              `db:"resolved_at" json:"resolved_at"`
 	ContactLastSeenAt         null.Time              `db:"contact_last_seen_at" json:"-"`

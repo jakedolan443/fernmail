@@ -207,7 +207,6 @@ func handleSendMessage(r *fastglue.Request) error {
 	if !inbox.Enabled {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, app.i18n.T("status.disabledInbox"), nil, envelope.InputError)
 	}
-
 	if req.SenderType != umodels.UserTypeAgent && req.SenderType != umodels.UserTypeContact {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, app.i18n.T("globals.messages.somethingWentWrong"), nil, envelope.InputError)
 	}
@@ -215,6 +214,18 @@ func handleSendMessage(r *fastglue.Request) error {
 	// Contacts cannot send private messages
 	if req.SenderType == umodels.UserTypeContact && req.Private {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, app.i18n.T("globals.messages.badRequest"), nil, envelope.InputError)
+	}
+	// Retired addresses remain readable so historical routing is never lost,
+	// but they must not be used for a public agent reply. Internal notes remain
+	// available for safely documenting historic conversations.
+	if conv.AddressID.Valid && req.SenderType == umodels.UserTypeAgent && !req.Private {
+		entry, err := app.address.Get(conv.AddressID.Int)
+		if err != nil {
+			return sendErrorEnvelope(r, err)
+		}
+		if !entry.Enabled {
+			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, app.i18n.T("address.disabled"), nil, envelope.InputError)
+		}
 	}
 
 	// Check if user has permission to send messages as contact

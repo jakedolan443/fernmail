@@ -165,17 +165,11 @@ const handleMarkAsUnread = () => {
 }
 
 const conversationRoute = computed(() => {
-  const baseRoute = route.params.inboxID
-    ? 'mailbox-inbox-conversation'
-    : route.params.viewID
-      ? 'view-inbox-conversation'
-      : 'inbox-conversation'
   return {
-    name: baseRoute,
+    name: 'address-inbox-conversation',
     params: {
       uuid: props.conversation.uuid,
-      ...(route.params.inboxID && { inboxID: route.params.inboxID }),
-      ...(baseRoute === 'view-inbox-conversation' && { viewID: route.params.viewID })
+      addressID: route.params.addressID || props.conversation.address_id
     },
     query: props.conversation.mentioned_message_uuid
       ? { scrollTo: props.conversation.mentioned_message_uuid }

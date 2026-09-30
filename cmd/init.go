@@ -14,6 +14,7 @@ import (
 
 	"html/template"
 
+	"github.com/jakedolan443/fernmail/internal/address"
 	auth_ "github.com/jakedolan443/fernmail/internal/auth"
 	"github.com/jakedolan443/fernmail/internal/authz"
 
@@ -47,7 +48,6 @@ import (
 	"github.com/jakedolan443/fernmail/internal/team"
 	tmpl "github.com/jakedolan443/fernmail/internal/template"
 	"github.com/jakedolan443/fernmail/internal/user"
-	"github.com/jakedolan443/fernmail/internal/view"
 	"github.com/jakedolan443/fernmail/internal/webhook"
 	"github.com/jakedolan443/fernmail/internal/ws"
 	"github.com/jmoiron/sqlx"
@@ -309,16 +309,10 @@ func initConversations(
 	return c
 }
 
-// initViews inits view manager.
-func initView(db *sqlx.DB, i18n *i18n.I18n) *view.Manager {
-	var lo = initLogger("view_manager")
-	m, err := view.New(view.Opts{
-		DB:   db,
-		Lo:   lo,
-		I18n: i18n,
-	})
+func initAddress(db *sqlx.DB) *address.Manager {
+	m, err := address.New(db)
 	if err != nil {
-		log.Fatalf("error initializing view manager: %v", err)
+		log.Fatalf("error initializing address manager: %v", err)
 	}
 	return m
 }
@@ -693,8 +687,8 @@ func startInboxes(ctx context.Context, mgr *inbox.Manager, msgStore inbox.Messag
 }
 
 // initAuthz initializes authorization enforcer.
-func initAuthz(i18n *i18n.I18n, inbox *inbox.Manager) *authz.Enforcer {
-	enforcer, err := authz.NewEnforcer(initLogger("authz"), i18n, inbox.CanAccess)
+func initAuthz(i18n *i18n.I18n, inbox *inbox.Manager, address *address.Manager) *authz.Enforcer {
+	enforcer, err := authz.NewEnforcer(initLogger("authz"), i18n, inbox.CanAccess, address.CanAccess)
 	if err != nil {
 		log.Fatalf("error initializing authz: %v", err)
 	}

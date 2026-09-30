@@ -26,7 +26,6 @@ export const createFormSchema = (t) =>
       .refine((v) => !v || validateEmail(v), {
         message: t('validation.invalidEmail')
       }),
-    email_aliases_text: z.string().optional(),
     enabled: z.boolean().optional(),
     csat_enabled: z.boolean().optional(),
 

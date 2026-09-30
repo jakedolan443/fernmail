@@ -1,11 +1,7 @@
 <template>
   <AdminSplitLayout>
-    <template #content>
-      <router-view></router-view>
-    </template>
-    <template #help>
-      <p>{{ $t('admin.sharedView.help') }}</p>
-    </template>
+    <template #content><router-view /></template>
+    <template #help><p>{{ $t('address.help') }}</p></template>
   </AdminSplitLayout>
 </template>
 

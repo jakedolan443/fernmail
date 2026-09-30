@@ -41,4 +41,4 @@ and activity updates do not generate notifications.
 
 The green favicon is the default; a custom favicon URL still takes precedence.
 The tab title prefixes the total unread message count, including mail outside the
-current page or saved view, and removes the prefix when no unread messages remain.
+current address, and removes the prefix when no unread messages remain.

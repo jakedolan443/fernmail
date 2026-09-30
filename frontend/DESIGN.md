@@ -151,7 +151,7 @@ Defined in `main.scss`. Prefer them over repeating the class list.
 | Utility | Expands to | Use for |
 |---|---|---|
 | `.box` | `border shadow-sm rounded-lg` | the standard card surface |
-| `.sidebar-section-label` | `text-xs font-medium uppercase tracking-wider text-muted-foreground` | sidebar group headers (Views, Team Inboxes) |
+| `.sidebar-section-label` | `text-xs font-medium uppercase tracking-wider text-muted-foreground` | sidebar group headers (Addresses) |
 | `.link-style` | `text-muted-foreground underline underline-offset-4 hover:text-foreground` | UI links. Not brand-colored, so links in chrome stay quiet |
 
 ---

@@ -40,11 +40,8 @@ export const useConversationStore = defineStore('conversation', () => {
   const selectedUUIDs = ref(new Set())
 
   const sidebarCounts = reactive({
-    mentioned: 0,
-    all: 0,
     unread: 0,
-    inboxes: {},
-    views: {}
+    addresses: {}
   })
 
   // Route changes reuse a count younger than the TTL; mutations and WS events pass force.
@@ -66,11 +63,8 @@ export const useConversationStore = defineStore('conversation', () => {
         const resp = await api.getSidebarCounts()
         const data = resp?.data?.data
         if (!data) return
-        sidebarCounts.mentioned = data.mentioned || 0
-        sidebarCounts.all = data.all || 0
         sidebarCounts.unread = data.unread || 0
-        sidebarCounts.views = data.views || {}
-        sidebarCounts.inboxes = data.inboxes || {}
+        sidebarCounts.addresses = data.addresses || {}
         sidebarCountsFetchedAt = Date.now()
       } catch {
         // The sidebar works without counts.
@@ -84,15 +78,6 @@ export const useConversationStore = defineStore('conversation', () => {
     })()
 
     return sidebarCountsRequest
-  }
-
-  async function fetchViewCount(viewID) {
-    try {
-      const resp = await api.getViewCount(viewID)
-      sidebarCounts.views[viewID] = resp?.data?.data?.count || 0
-    } catch {
-      // The sidebar works without counts.
-    }
   }
 
   // WS events burst one per conversation; leading + trailing keeps it to two requests per burst.
@@ -215,9 +200,7 @@ export const useConversationStore = defineStore('conversation', () => {
     status: persistedListStatus.value,
     sortField: persistedListSortField.value,
     listFilters: [],
-    viewID: 0,
-    teamID: 0,
-    inboxID: 0,
+    addressID: 0,
     loading: false,
     fetching: false,
     initialized: false,
@@ -266,10 +249,7 @@ export const useConversationStore = defineStore('conversation', () => {
 
   function setListStatus(status, fetch = true) {
     conversations.status = status
-    // Views clear the status, so only a real selection updates the remembered one.
-    if (status) {
-      persistedListStatus.value = status
-    }
+    if (status) persistedListStatus.value = status
     if (fetch) {
       resetConversations()
       reFetchConversationsList()
@@ -346,9 +326,19 @@ export const useConversationStore = defineStore('conversation', () => {
   function markConversationAsRead(uuid) {
     const row = conversations.data.find((conv) => conv.uuid === uuid)
     if (row) {
-      sidebarCounts.unread = Math.max(0, sidebarCounts.unread - (row.unread_message_count || 0))
+      const unread = row.unread_message_count || 0
+      sidebarCounts.unread = Math.max(0, sidebarCounts.unread - unread)
+      adjustAddressUnread(row.address_id, -unread)
       row.unread_message_count = 0
     }
+  }
+
+  function adjustAddressUnread(addressID, delta) {
+    if (!addressID || !delta) return
+    const current = sidebarCounts.addresses[addressID] || 0
+    const next = Math.max(0, current + delta)
+    if (next) sidebarCounts.addresses[addressID] = next
+    else delete sidebarCounts.addresses[addressID]
   }
 
   async function markAsUnread(uuid) {
@@ -356,11 +346,10 @@ export const useConversationStore = defineStore('conversation', () => {
       await api.markConversationAsUnread(uuid)
       const index = conversations.data.findIndex((conv) => conv.uuid === uuid)
       if (index !== -1) {
-        sidebarCounts.unread =
-          Math.max(
-            0,
-            sidebarCounts.unread - (conversations.data[index].unread_message_count || 0)
-          ) + 1
+        const row = conversations.data[index]
+        const previousUnread = row.unread_message_count || 0
+        sidebarCounts.unread = Math.max(0, sidebarCounts.unread - previousUnread) + 1
+        adjustAddressUnread(row.address_id, 1 - previousUnread)
         conversations.data[index].unread_message_count = 1
       }
       fetchSidebarCounts({ force: true })
@@ -373,6 +362,11 @@ export const useConversationStore = defineStore('conversation', () => {
     const row = conversations.data.find((c) => c.uuid === uuid)
     if (!row) return
     row.unread_message_count = Math.min((row.unread_message_count || 0) + 1, 10)
+    adjustAddressUnread(row.address_id, 1)
+  }
+
+  function incrementAddressUnread(addressID) {
+    adjustAddressUnread(addressID, 1)
   }
 
   const currentSenderName = computed(() => {
@@ -594,65 +588,26 @@ export const useConversationStore = defineStore('conversation', () => {
 
   function fetchNextConversations() {
     if (conversations.fetching || !conversations.hasMore) return
-    fetchConversationsList(
-      false,
-      conversations.listType,
-      conversations.teamID,
-      conversations.listFilters,
-      conversations.viewID,
-      conversations.page + 1,
-      conversations.inboxID
-    )
+    fetchConversationsList(false, conversations.addressID, conversations.page + 1)
   }
 
   function reFetchConversationsList(showLoader = true) {
-    fetchConversationsList(
-      showLoader,
-      conversations.listType,
-      conversations.teamID,
-      conversations.listFilters,
-      conversations.viewID,
-      conversations.page,
-      conversations.inboxID
-    )
+    fetchConversationsList(showLoader, conversations.addressID, conversations.page)
   }
 
   async function fetchFirstPageConversations() {
-    await fetchConversationsList(
-      false,
-      conversations.listType,
-      conversations.teamID,
-      conversations.listFilters,
-      conversations.viewID,
-      1,
-      conversations.inboxID
-    )
+    await fetchConversationsList(false, conversations.addressID, 1)
   }
 
-  async function fetchConversationsList(
-    showLoader = true,
-    listType = null,
-    teamID = 0,
-    filters = [],
-    viewID = 0,
-    page = 0,
-    inboxID = 0
-  ) {
-    if (!listType) return
-    if (
-      conversations.listType !== listType ||
-      conversations.teamID !== teamID ||
-      conversations.viewID !== viewID ||
-      conversations.inboxID !== inboxID
-    ) {
+  async function fetchConversationsList(showLoader = true, addressID = 0, page = 0) {
+    if (!addressID) return
+    if (conversations.listType !== CONVERSATION_LIST_TYPE.ADDRESS || conversations.addressID !== addressID) {
       resetConversations()
     }
-    conversations.listType = listType
-    conversations.teamID = teamID
-    conversations.viewID = viewID
-    conversations.inboxID = inboxID
+    conversations.listType = CONVERSATION_LIST_TYPE.ADDRESS
+    conversations.addressID = addressID
+    let filters = []
     if (conversations.status) {
-      filters = filters.filter((f) => f.model !== 'conversation_statuses')
       filters.push({
         model: 'conversation_statuses',
         field: 'name',
@@ -668,14 +623,7 @@ export const useConversationStore = defineStore('conversation', () => {
     const isStale = () => seq !== contextSeq
     try {
       conversations.errorMessage = ''
-      const response = await makeConversationListRequest(
-        listType,
-        teamID,
-        viewID,
-        filters,
-        page,
-        inboxID
-      )
+      const response = await makeConversationListRequest(addressID, filters, page)
       if (isStale()) return
       processConversationListResponse(response)
     } catch (error) {
@@ -696,49 +644,18 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
-  async function makeConversationListRequest(listType, teamID, viewID, filters, page, inboxID) {
+  async function makeConversationListRequest(addressID, filters, page) {
     filters = filters.length > 0 ? JSON.stringify(filters) : []
-    switch (listType) {
-      case CONVERSATION_LIST_TYPE.ALL:
-      case CONVERSATION_LIST_TYPE.MAILBOX:
-        return await (
-          listType === CONVERSATION_LIST_TYPE.MAILBOX
-            ? (params) => api.getMailboxConversations(inboxID, params)
-            : api.getAllConversations
-        )({
-          page: page,
-          page_size: CONV_LIST_PAGE_SIZE,
-          order_by:
-            sortFieldMap[conversations.sortField].model +
-            '.' +
-            sortFieldMap[conversations.sortField].field,
-          order: sortFieldMap[conversations.sortField].order,
-          filters
-        })
-      case CONVERSATION_LIST_TYPE.VIEW:
-        return await api.getViewConversations(viewID, {
-          page: page,
-          page_size: CONV_LIST_PAGE_SIZE,
-          order_by:
-            sortFieldMap[conversations.sortField].model +
-            '.' +
-            sortFieldMap[conversations.sortField].field,
-          order: sortFieldMap[conversations.sortField].order
-        })
-      case CONVERSATION_LIST_TYPE.MENTIONED:
-        return await api.getMentionedConversations({
-          page: page,
-          page_size: CONV_LIST_PAGE_SIZE,
-          order_by:
-            sortFieldMap[conversations.sortField].model +
-            '.' +
-            sortFieldMap[conversations.sortField].field,
-          order: sortFieldMap[conversations.sortField].order,
-          filters
-        })
-      default:
-        throw new Error('Invalid conversation list type: ' + listType)
-    }
+    return api.getAddressConversations(addressID, {
+      page,
+      page_size: CONV_LIST_PAGE_SIZE,
+      order_by:
+        sortFieldMap[conversations.sortField].model +
+        '.' +
+        sortFieldMap[conversations.sortField].field,
+      order: sortFieldMap[conversations.sortField].order,
+      filters
+    })
   }
 
   function trimListToCurrentPage() {
@@ -977,10 +894,10 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   function canPushInsert(payload) {
-    if (conversations.listType === CONVERSATION_LIST_TYPE.MAILBOX) {
-      return Number(payload.inbox_id) === Number(conversations.inboxID)
-    }
-    return conversations.listType === CONVERSATION_LIST_TYPE.ALL
+    return (
+      conversations.listType === CONVERSATION_LIST_TYPE.ADDRESS &&
+      Number(payload.address_id) === Number(conversations.addressID)
+    )
   }
 
   function handleConvPush(payload) {
@@ -1170,6 +1087,7 @@ export const useConversationStore = defineStore('conversation', () => {
     updateAssigneeLastSeen,
     markAsUnread,
     incrementUnread,
+    incrementAddressUnread,
     updateConversationMessage,
     snoozeConversation,
     fetchConversation,
@@ -1221,7 +1139,6 @@ export const useConversationStore = defineStore('conversation', () => {
     isSelected,
     sidebarCounts,
     fetchSidebarCounts,
-    fetchViewCount,
     refreshSidebarCounts
   }
 })

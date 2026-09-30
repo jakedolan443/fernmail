@@ -2,7 +2,7 @@
   "name": "Fernmail",
   "short_name": "Fernmail",
   "description": "A shared home for your mail",
-  "start_url": "/inboxes/all",
+  "start_url": "/addresses",
   "scope": "/",
   "display": "standalone",
   "background_color": "hsl(0 0% 99.2%)",

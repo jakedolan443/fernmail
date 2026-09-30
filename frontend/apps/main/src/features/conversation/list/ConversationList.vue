@@ -11,8 +11,7 @@
 
     <!-- Filters (hidden when bulk selecting) -->
     <div v-else class="p-2 flex justify-between items-center">
-      <!-- Status dropdown-menu, hidden when a view is selected as views are pre-filtered -->
-      <DropdownMenu v-if="!route.params.viewID">
+      <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" class="w-30">
             <div>
@@ -32,11 +31,6 @@
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <div v-else>
-        <Button variant="ghost" class="w-30">
-          <span>{{ conversationStore.conversations.total }}</span>
-        </Button>
-      </div>
 
       <!-- Sort dropdown-menu -->
       <DropdownMenu>
@@ -161,7 +155,7 @@ import {
   DropdownMenuTrigger
 } from '@shared-ui/components/ui/dropdown-menu'
 import { SidebarTrigger } from '@shared-ui/components/ui/sidebar'
-import { useInboxStore } from '@/stores/inbox'
+import { useAddressStore } from '@/stores/address'
 import { useConversationStore } from '@/stores/conversation'
 import { useBulkActionPermissions } from '@/composables/useBulkActionPermissions'
 import EmptyList from '@/features/conversation/list/ConversationEmptyList.vue'
@@ -170,7 +164,7 @@ import ConversationListItem from '@/features/conversation/list/ConversationListI
 import ConversationListItemSkeleton from '@/features/conversation/list/ConversationListItemSkeleton.vue'
 
 const conversationStore = useConversationStore()
-const inboxStore = useInboxStore()
+const addressStore = useAddressStore()
 const { canBulkAct } = useBulkActionPermissions()
 const route = useRoute()
 const { t } = useI18n()
@@ -178,19 +172,8 @@ const { t } = useI18n()
 const hasSelection = computed(() => conversationStore.selectedCount > 0)
 
 const title = computed(() => {
-  if (route.params.inboxID) {
-    const mailbox = inboxStore.inboxes.find(
-      (item) => String(item.id) === String(route.params.inboxID)
-    )
-    return mailbox?.name || t('globals.terms.inbox')
-  }
-  const typeKey = route.meta?.typeKey?.(route)
-  if (typeKey) {
-    return t(typeKey)
-  }
-  const key = route.meta?.titleKey
-  if (!key) return ''
-  return t(key, route.meta?.titleCount || 1)
+  const address = addressStore.get(route.params.addressID)
+  return address?.address || 'Addresses'
 })
 
 const handleStatusChange = (status) => {

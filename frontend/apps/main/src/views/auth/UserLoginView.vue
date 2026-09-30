@@ -246,7 +246,7 @@ const loginAction = () => {
       if (nextParam) {
         router.push(nextParam)
       } else {
-        router.push({ name: 'inboxes' })
+        router.push({ name: 'address-inbox' })
       }
     })
     .catch((error) => {

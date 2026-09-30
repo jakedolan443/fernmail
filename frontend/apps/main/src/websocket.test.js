@@ -4,10 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { conversations, notifyNewMessage } = vi.hoisted(() => ({
   conversations: {
     conversation: { data: null },
-    sidebarCounts: { unread: 0 },
+    sidebarCounts: { unread: 0, addresses: {} },
     handleConvPush: vi.fn(),
     mergeConversationUpdate: vi.fn(),
     incrementUnread: vi.fn(),
+    incrementAddressUnread: vi.fn(),
     isConversationInList: vi.fn(() => true),
     updateConversationMessage: vi.fn(),
     refreshSidebarCounts: vi.fn()
@@ -15,6 +16,9 @@ const { conversations, notifyNewMessage } = vi.hoisted(() => ({
   notifyNewMessage: vi.fn()
 }))
 vi.mock('./stores/conversation', () => ({ useConversationStore: () => conversations }))
+vi.mock('./stores/address', () => ({
+  useAddressStore: () => ({ fetchAddresses: vi.fn() })
+}))
 vi.mock('./stores/browserNotifications', () => ({
   useBrowserNotificationsStore: () => ({ notifyNewMessage })
 }))

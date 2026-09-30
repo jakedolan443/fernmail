@@ -26,10 +26,10 @@
           <div
             class="mb-6 px-2 pt-3 text-xs font-medium uppercase tracking-wider text-muted-foreground"
           >
-            Mailbox
+            Addresses
           </div>
           <div class="flex items-center gap-3 rounded-md bg-accent px-3 py-2 text-sm font-medium">
-            <Inbox class="h-4 w-4" />All mail<span class="ml-auto text-xs">{{ unreadCount }}</span>
+            <Mail class="h-4 w-4" />contact@antimuonstudios.com<span class="ml-auto text-xs">{{ unreadCount }}</span>
           </div>
           <div class="mt-6 px-2 text-xs leading-relaxed text-muted-foreground">
             Green strips mark unread mail. Open a message to clear its strip, or right-click to mark
@@ -45,7 +45,7 @@
           aria-label="Mock inbox"
         >
           <div class="flex h-12 items-center justify-between border-b px-3">
-            <h1 class="text-xl font-semibold">All mail</h1>
+            <h1 class="text-xl font-semibold">contact@antimuonstudios.com</h1>
             <span class="text-xs text-muted-foreground">{{ unreadCount }} unread</span>
           </div>
           <div
@@ -100,7 +100,7 @@
 import { computed, ref, watch } from 'vue'
 import FernmailLogo from '@main/components/brand/FernmailLogo.vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Bell, Inbox, MailPlus } from 'lucide-vue-next'
+import { Bell, Mail, MailPlus } from 'lucide-vue-next'
 import { Button } from '@shared-ui/components/ui/button'
 import { TooltipProvider } from '@shared-ui/components/ui/tooltip'
 import ConversationListItem from '@main/features/conversation/list/ConversationListItem.vue'
@@ -111,7 +111,6 @@ import { useUserStore } from '@main/stores/user'
 import { mailNotificationContent } from '@main/stores/browserNotifications'
 import { WebSocketClient } from '@main/websocket'
 import api from '@main/api'
-import { useMailboxTitle } from '@main/composables/useMailboxTitle'
 
 const route = useRoute()
 const router = useRouter()
@@ -124,7 +123,6 @@ user.setCurrentUser({
   roles: []
 })
 const store = useConversationStore()
-useMailboxTitle()
 const client = new WebSocketClient()
 // Feed the real event handler locally; no socket is opened and no mail is sent.
 client.socket = {}
@@ -141,7 +139,8 @@ api.getSidebarCounts = async () => ({
       unread: store.conversations.data.reduce(
         (sum, row) => sum + (row.unread_message_count || 0),
         0
-      )
+      ),
+      addresses: { 1: store.conversations.data.reduce((sum, row) => sum + (row.unread_message_count || 0), 0) }
     }
   }
 })
@@ -173,6 +172,7 @@ function makeMail(uuid, firstName, lastName, subject, body, minutes, unread) {
     inbox_channel: 'email',
     inbox_name: 'Studio mail',
     inbox_mail: 'contact@antiumstudios.com',
+    address_id: 1,
     last_message: body,
     last_message_at: createdAt,
     last_message_sender: 'contact',
@@ -206,7 +206,8 @@ function showConversation(uuid) {
 async function reset() {
   notificationPreview.value = null
   store.conversations.status = 'Open'
-  store.conversations.listType = 'all'
+  store.conversations.listType = 'address'
+  store.conversations.addressID = 1
   store.conversations.sortField = 'newest'
   store.conversations.data = [
     makeMail(
@@ -267,7 +268,8 @@ async function reset() {
     (sum, row) => sum + row.unread_message_count,
     0
   )
-  await router.push('/inboxes/all/conversation/albert')
+  store.sidebarCounts.addresses = { 1: store.sidebarCounts.unread }
+  await router.push('/addresses/1/conversation/albert')
   showConversation('albert')
 }
 
@@ -293,8 +295,8 @@ function receive() {
 
 function openNotificationPreview() {
   router.push({
-    name: 'inbox-conversation',
-    params: { type: 'all', uuid: notificationPreview.value.uuid }
+    name: 'address-inbox-conversation',
+    params: { addressID: 1, uuid: notificationPreview.value.uuid }
   })
   notificationPreview.value = null
 }

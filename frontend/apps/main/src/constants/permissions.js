@@ -1,13 +1,10 @@
 export const permissions = {
   CONVERSATIONS_READ: 'conversations:read',
-  CONVERSATIONS_WRITE: 'conversations:write',
   CONVERSATIONS_READ_ALL: 'conversations:read_all',
   CONVERSATIONS_UPDATE_STATUS: 'conversations:update_status',
   MESSAGES_READ: 'messages:read',
   MESSAGES_WRITE: 'messages:write',
   MESSAGES_WRITE_PRIVATE: 'messages:write_private',
-  VIEW_MANAGE: 'view:manage',
-  SHARED_VIEWS_MANAGE: 'shared_views:manage',
   GENERAL_SETTINGS_MANAGE: 'general_settings:manage',
   STATUS_MANAGE: 'status:manage',
   OIDC_MANAGE: 'oidc:manage',

@@ -19,6 +19,7 @@ import (
 
 	_ "time/tzdata"
 
+	"github.com/jakedolan443/fernmail/internal/address"
 	auth_ "github.com/jakedolan443/fernmail/internal/auth"
 	"github.com/jakedolan443/fernmail/internal/authz"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/jakedolan443/fernmail/internal/search"
 
 	umodels "github.com/jakedolan443/fernmail/internal/user/models"
-	"github.com/jakedolan443/fernmail/internal/view"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/jakedolan443/fernmail/internal/conversation"
@@ -105,9 +105,9 @@ type App struct {
 	team           *team.Manager
 	status         *status.Manager
 	inbox          *inbox.Manager
+	address        *address.Manager
 	tmpl           *template.Manager
 	conversation   *conversation.Manager
-	view           *view.Manager
 	search         *search.Manager
 	accountmail    *accountmail.Service
 	webhook        *webhook.Manager
@@ -218,6 +218,7 @@ func main() {
 		media                       = initMedia(db, i18n, settings)
 		resourceImages              = resourceimage.NewStore(db, media, constants.UploadProvider, settings.GetResourcePolicyTx)
 		inbox                       = initInbox(db, i18n)
+		address                     = initAddress(db)
 		team                        = initTeam(db, i18n)
 		webhook                     = initWebhook(db, i18n, ssrfControl)
 		user                        = initUser(i18n, db)
@@ -266,6 +267,7 @@ func main() {
 		media:          media,
 		setting:        settings,
 		inbox:          inbox,
+		address:        address,
 		user:           user,
 		team:           team,
 		status:         status,
@@ -273,8 +275,7 @@ func main() {
 		accountmail:    accountmail,
 		consts:         atomic.Value{},
 		conversation:   conversation,
-		authz:          initAuthz(i18n, inbox),
-		view:           initView(db, i18n),
+		authz:          initAuthz(i18n, inbox, address),
 		search:         initSearch(db, i18n, conversation),
 		role:           initRole(db, i18n),
 		importer:       initImporter(i18n),

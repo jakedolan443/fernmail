@@ -2,58 +2,88 @@ package conversation
 
 import (
 	"context"
-	"slices"
 	"strings"
 	"testing"
 
 	authzModels "github.com/jakedolan443/fernmail/internal/authz/models"
 	"github.com/jakedolan443/fernmail/internal/conversation/models"
-	"github.com/jakedolan443/fernmail/internal/dbutil"
 	"github.com/jakedolan443/fernmail/internal/testutil"
-	vmodels "github.com/jakedolan443/fernmail/internal/view/models"
 	"github.com/jmoiron/sqlx/types"
 )
 
-func TestUnreadMessageCountAcrossMailbox(t *testing.T) {
-	db := testutil.NewDB(t, "unread_mail_count")
+func TestUnreadAddressCountsOnlyIncludeAccessibleAddresses(t *testing.T) {
+	db := testutil.NewDB(t, "unread_address_counts")
 	db.MustExec(`
 		INSERT INTO users(type, email, first_name) VALUES
-		('agent', 'reader@example.test', 'Reader'),
-		('agent', 'other@example.test', 'Other'),
-		('contact', 'sender@example.test', 'Sender');
-		INSERT INTO inboxes(name, channel) VALUES ('Mail', 'email'), ('Historical chat', 'livechat');
-		INSERT INTO conversations(contact_id, inbox_id, status_id, assigned_user_id)
-		SELECT (SELECT id FROM users WHERE email='sender@example.test'), inboxes.id,
-		(SELECT id FROM conversation_statuses WHERE name='Closed'), users.id
-		FROM inboxes CROSS JOIN users WHERE users.type='agent';
-		INSERT INTO conversation_messages(conversation_id, sender_id, sender_type, type, status, created_at)
-		SELECT conversations.id, conversations.contact_id, 'contact', 'incoming', 'received', now() - interval '1 minute'
-		FROM conversations CROSS JOIN generate_series(1, 30);
-		INSERT INTO conversation_messages(conversation_id, sender_id, sender_type, type, status, meta)
-		SELECT id, contact_id, 'contact', 'incoming', 'received', '{"continuity_email":true}' FROM conversations;
+			('agent', 'reader@example.test', 'Reader'),
+			('contact', 'sender@example.test', 'Sender');
+		INSERT INTO inboxes(name, channel) VALUES ('Director transport', 'email'), ('Support transport', 'email');
 	`)
-	var userID int
-	if err := db.Get(&userID, `SELECT id FROM users WHERE email='reader@example.test'`); err != nil {
-		t.Fatal(err)
-	}
-	m := &Manager{db: db}
-	check := func(lists []string, want int) {
-		t.Helper()
-		got, err := m.getUnreadMessageCount(context.Background(), userID, nil, lists)
-		if err != nil || got != want {
-			t.Fatalf("count(%v) = %d, %v; want %d", lists, got, err, want)
+	var reader, sender, directorInbox, supportInbox, directorAddress, supportAddress int
+	for _, row := range []struct {
+		dest *int
+		q    string
+	}{
+		{&reader, `SELECT id FROM users WHERE email='reader@example.test'`},
+		{&sender, `SELECT id FROM users WHERE email='sender@example.test'`},
+		{&directorInbox, `SELECT id FROM inboxes WHERE name='Director transport'`},
+		{&supportInbox, `SELECT id FROM inboxes WHERE name='Support transport'`},
+	} {
+		if err := db.Get(row.dest, row.q); err != nil {
+			t.Fatal(err)
 		}
 	}
-	check([]string{models.AllConversations}, 60) // Not capped by row badge or list page; includes closed mail.
-	check([]string{models.AssignedConversations}, 30)
-	check(nil, 0)
-	db.MustExec(`INSERT INTO conversation_last_seen(user_id, conversation_id, last_seen_at)
-		SELECT $1, id, now() FROM conversations WHERE assigned_user_id=$1`, userID)
-	check([]string{models.AllConversations}, 30)
-	check([]string{models.AssignedConversations}, 0)
+	if err := db.Get(&directorAddress, `INSERT INTO email_addresses(inbox_id,address,kind,restricted) VALUES($1,'director@example.test','mailbox',true) RETURNING id`, directorInbox); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Get(&supportAddress, `INSERT INTO email_addresses(inbox_id,address,kind,restricted) VALUES($1,'support@example.test','mailbox',true) RETURNING id`, supportInbox); err != nil {
+		t.Fatal(err)
+	}
+	db.MustExec(`INSERT INTO email_address_users(address_id,user_id) VALUES($1,$2)`, directorAddress, reader)
+
+	var directorConversation, supportConversation int
+	if err := db.Get(&directorConversation, `INSERT INTO conversations(contact_id,inbox_id,address_id,status_id)
+		VALUES($1,$2,$3,(SELECT id FROM conversation_statuses WHERE name='Open')) RETURNING id`, sender, directorInbox, directorAddress); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Get(&supportConversation, `INSERT INTO conversations(contact_id,inbox_id,address_id,status_id)
+		VALUES($1,$2,$3,(SELECT id FROM conversation_statuses WHERE name='Open')) RETURNING id`, sender, supportInbox, supportAddress); err != nil {
+		t.Fatal(err)
+	}
+	db.MustExec(`
+		INSERT INTO conversation_messages(conversation_id,sender_id,sender_type,type,status,text_content) VALUES
+			($1,$2,'contact','incoming','received','first director message'),
+			($1,$2,'contact','incoming','received','second director message'),
+			($1,$2,'contact','incoming','received','third director message');
+		INSERT INTO conversation_messages(conversation_id,sender_id,sender_type,type,status,text_content,meta) VALUES
+			($1,$2,'contact','incoming','received','continuity', '{"continuity_email":true}');
+		INSERT INTO conversation_messages(conversation_id,sender_id,sender_type,type,status,text_content) VALUES
+			($3,$2,'contact','incoming','received','hidden support message');
+	`, directorConversation, sender, supportConversation)
+
+	m := &Manager{db: db}
+	permissions := []string{authzModels.PermConversationsRead, authzModels.PermConversationsReadAll}
+	counts, err := m.GetSidebarCounts(reader, permissions, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts.Unread != 3 || counts.Addresses[directorAddress] != 3 || len(counts.Addresses) != 1 {
+		t.Fatalf("counts = %#v, want only three unread director messages", counts)
+	}
+
+	// Per-agent reads affect attention badges without touching other addresses.
+	db.MustExec(`INSERT INTO conversation_last_seen(user_id,conversation_id,last_seen_at) VALUES($1,$2,NOW()+interval '1 second')`, reader, directorConversation)
+	counts, err = m.GetSidebarCounts(reader, permissions, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts.Unread != 0 || len(counts.Addresses) != 0 {
+		t.Fatalf("counts after read = %#v, want no unread messages", counts)
+	}
 }
 
-// stubSettingsStore satisfies the settingsStore dependency for query building tests.
+// stubSettingsStore satisfies the settingsStore dependency for query-building
+// and unrelated conversation tests.
 type stubSettingsStore struct{}
 
 func (stubSettingsStore) GetAppRootURL() (string, error) { return "", nil }
@@ -66,7 +96,6 @@ func (stubSettingsStore) Get(key string) (types.JSONText, error) {
 	return types.JSONText(`"Etc/UTC"`), nil
 }
 
-// newTestManager returns a Manager with only the dependencies query building needs.
 func newTestManager() *Manager {
 	return &Manager{settingsStore: stubSettingsStore{}}
 }
@@ -80,7 +109,6 @@ func TestListsForUserPermissions(t *testing.T) {
 		authzModels.PermConversationsReadTeamAll,
 		authzModels.PermConversationsRead,
 	}
-
 	lists := ListsForUserPermissions(agentPerms)
 	if len(lists) != 1 || lists[0] != models.AllConversations {
 		t.Fatalf("read_all should short-circuit to all only, got %v", lists)
@@ -93,143 +121,47 @@ func TestListsForUserPermissions(t *testing.T) {
 		authzModels.PermConversationsReadTeamAll,
 	}
 	lists = ListsForUserPermissions(restricted)
-	want := []string{
+	if len(lists) != 3 || !containsAll(lists,
 		models.UnassignedConversations,
 		models.AssignedConversations,
 		models.TeamAllConversations,
+	) {
+		t.Fatalf("restricted lists = %v", lists)
 	}
-	if len(lists) != len(want) {
-		t.Fatalf("got %d list types, want %d: %v", len(lists), len(want), lists)
-	}
-	for _, w := range want {
-		if !slices.Contains(lists, w) {
-			t.Fatalf("missing list type %q in %v", w, lists)
+}
+
+func containsAll(values []string, want ...string) bool {
+	for _, item := range want {
+		if !strings.Contains(","+strings.Join(values, ",")+",", ","+item+",") {
+			return false
 		}
 	}
-	if slices.Contains(lists, models.TeamUnassignedConversations) {
-		t.Fatalf("team unassigned should be omitted when team all is present: %v", lists)
-	}
+	return true
 }
 
-func TestUserCanAccessView(t *testing.T) {
-	userID := 5
-	teamIDs := []int{2, 3}
-
-	personalOther := vmodels.View{Visibility: vmodels.VisibilityUser, UserID: intPtr(99)}
-	if UserCanAccessView(personalOther, userID, teamIDs) {
-		t.Fatal("expected no access to another user's personal view")
-	}
-
-	personalOwn := vmodels.View{Visibility: vmodels.VisibilityUser, UserID: intPtr(userID)}
-	if !UserCanAccessView(personalOwn, userID, teamIDs) {
-		t.Fatal("expected access to own personal view")
-	}
-
-	sharedAll := vmodels.View{Visibility: vmodels.VisibilityAll}
-	if !UserCanAccessView(sharedAll, userID, teamIDs) {
-		t.Fatal("expected access to shared-all view")
-	}
-
-	teamView := vmodels.View{Visibility: vmodels.VisibilityTeam, TeamID: intPtr(2)}
-	if !UserCanAccessView(teamView, userID, teamIDs) {
-		t.Fatal("expected access to team view for member")
-	}
-
-	otherTeam := vmodels.View{Visibility: vmodels.VisibilityTeam, TeamID: intPtr(9)}
-	if UserCanAccessView(otherTeam, userID, teamIDs) {
-		t.Fatal("expected no access to other team view")
-	}
-}
-
-func TestMakeConversationsCountQueryOpenAndInboxFilter(t *testing.T) {
-	m := newTestManager()
-	filters := `[{"model":"conversations","field":"inbox_id","operator":"equals","value":"4"}]`
-	query, args, err := m.makeConversationsCountQuery(nil, 1, []int{}, []string{models.AllConversations}, filters, "")
+func TestListConditionsAlwaysRequireAddressAccess(t *testing.T) {
+	args := []any{7}
+	conditions, err := appendListTypeConditions([]string{models.AllConversations}, 7, 7, nil, &args)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatal(err)
 	}
-	if strings.Contains(query, "category = 'open'") {
-		t.Fatalf("view counts must not force open category: %s", query)
+	if len(conditions) != 1 || !strings.Contains(conditions[0], "can_access_email_address") {
+		t.Fatalf("all list conditions must enforce address access: %v", conditions)
 	}
-	if !strings.Contains(query, "inbox_id") {
-		t.Fatalf("expected inbox_id filter in query: %s", query)
-	}
-	if len(args) < 1 {
-		t.Fatalf("expected at least 1 arg, got %d: %v", len(args), args)
-	}
-}
 
-func TestMakeConversationsCountQueryAssignedList(t *testing.T) {
-	m := newTestManager()
-	query, args, err := m.makeConversationsCountQuery(nil, 7, []int{}, []string{models.AssignedConversations}, "[]", "")
+	args = []any{7}
+	conditions, err = appendListTypeConditions([]string{models.TeamAllConversations}, 7, 7, nil, &args)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatal(err)
 	}
-	if !strings.Contains(query, "assigned_user_id = $") {
-		t.Fatalf("expected assigned_user_id condition: %s", query)
-	}
-	if len(args) != 2 || args[0] != 7 || args[1] != 7 {
-		t.Fatalf("expected assignee and inbox viewer args, got %v", args)
+	if !strings.Contains(conditions[0], "IN (NULL)") || !strings.Contains(conditions[0], "can_access_email_address") {
+		t.Fatalf("empty team scope must be valid and address-gated: %s", conditions[0])
 	}
 }
 
-func TestMakeConversationsCountQueryEmptyListTypes(t *testing.T) {
-	m := newTestManager()
-	_, _, err := m.makeConversationsCountQuery(nil, 1, []int{}, []string{}, "[]", "")
-	if err == nil {
-		t.Fatal("expected error for empty list types")
+func TestGetUnreadAddressCountsRejectsEmptyListScope(t *testing.T) {
+	m := &Manager{}
+	if _, err := m.getUnreadAddressCounts(context.Background(), 1, nil, nil); err == nil {
+		t.Fatal("expected an empty list scope to be rejected")
 	}
 }
-
-func TestMakeViewCountsQuerySingleStatement(t *testing.T) {
-	m := newTestManager()
-	views := []vmodels.View{
-		{ID: 3, Filters: []byte(`[{"model":"conversations","field":"inbox_id","operator":"equals","value":"1"}]`)},
-		{ID: 9, Filters: []byte(`[{"model":"conversations","field":"inbox_id","operator":"equals","value":"2"}]`)},
-	}
-
-	query, args, err := m.makeViewCountsQuery(4, []int{}, []string{models.AllConversations}, views)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if strings.Count(query, "UNION ALL") != 1 {
-		t.Fatalf("expected the two views to be unioned into one statement: %s", query)
-	}
-	if !strings.Contains(query, "SELECT 3 AS view_id") || !strings.Contains(query, "SELECT 9 AS view_id") {
-		t.Fatalf("expected both view ids to be selected: %s", query)
-	}
-	// Each view contributes the inbox viewer and an inbox_id filter, numbered continuously.
-	if len(args) != 4 {
-		t.Fatalf("expected 4 args across both views, got %d: %v", len(args), args)
-	}
-	if !strings.Contains(query, "$1") || !strings.Contains(query, "$2") {
-		t.Fatalf("expected continuous placeholder numbering: %s", query)
-	}
-	if strings.Contains(query, "$5") {
-		t.Fatalf("placeholder numbering ran past the bound args: %s", query)
-	}
-}
-
-func TestMakeConversationsCountQueryEmptyTeamIDs(t *testing.T) {
-	m := newTestManager()
-	// A user with the team permission but no teams must still produce valid SQL.
-	query, _, err := m.makeConversationsCountQuery(nil, 1, []int{}, []string{models.TeamAllConversations}, "[]", "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if strings.Contains(query, "IN ()") {
-		t.Fatalf("empty team list produced invalid SQL: %s", query)
-	}
-	if !strings.Contains(query, "IN (NULL)") {
-		t.Fatalf("expected empty team list to match nothing: %s", query)
-	}
-}
-
-func TestViewFiltersValidateAgainstListFields(t *testing.T) {
-	filters := `[{"model":"conversations","field":"inbox_id","operator":"equals","value":"1"}]`
-	if err := dbutil.ValidateFilters(filters, ListFilterAllowedFields, ListFilterRenderers); err != nil {
-		t.Fatalf("expected valid filters, got %v", err)
-	}
-}
-
-func intPtr(v int) *int { return &v }

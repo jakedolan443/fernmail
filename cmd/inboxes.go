@@ -75,8 +75,12 @@ func handleCreateInbox(r *fastglue.Request) error {
 		return sendErrorEnvelope(r, err)
 	}
 
-	if err := reloadInbox(app, createdInbox.ID); err != nil {
-		app.lo.Error("error reloading inbox", "id", createdInbox.ID, "error", err)
+	var emailConfig imodels.Config
+	if err := json.Unmarshal(createdInbox.Config, &emailConfig); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, app.i18n.T("globals.messages.somethingWentWrong"), nil, envelope.GeneralError)
+	}
+	if err := provisionEmailAddresses(app, createdInbox, emailConfig.EmailAliases); err != nil {
+		app.lo.Error("error provisioning email addresses", "inbox_id", createdInbox.ID, "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, app.i18n.T("globals.messages.somethingWentWrong"), nil, envelope.GeneralError)
 	}
 
@@ -100,6 +104,10 @@ func handleUpdateInbox(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
 			app.i18n.T("globals.messages.somethingWentWrong"), nil, envelope.InputError)
 	}
+	currentInbox, err := app.inbox.GetDBRecord(id)
+	if err != nil {
+		return sendErrorEnvelope(r, err)
+	}
 
 	if err := r.Decode(&inbox, "json"); err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, app.i18n.T("errors.parsingRequest"), err.Error(), envelope.InputError)
@@ -113,14 +121,17 @@ func handleUpdateInbox(r *fastglue.Request) error {
 	if err := validateInbox(app, inbox); err != nil {
 		return sendErrorEnvelope(r, err)
 	}
+	if err := preserveAddressRuntimeConfig(app, currentInbox, &inbox); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, envelope.InputError)
+	}
 
 	updatedInbox, err := app.inbox.Update(id, inbox)
 	if err != nil {
 		return sendErrorEnvelope(r, err)
 	}
 
-	if err := reloadInbox(app, id); err != nil {
-		app.lo.Error("error reloading inbox", "id", id, "error", err)
+	if err := syncEmailAddressConfig(app, id); err != nil {
+		app.lo.Error("error syncing email address configuration", "id", id, "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, app.i18n.T("globals.messages.somethingWentWrong"), nil, envelope.GeneralError)
 	}
 

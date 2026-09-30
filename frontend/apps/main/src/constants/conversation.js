@@ -1,8 +1,5 @@
 export const CONVERSATION_LIST_TYPE = {
-  VIEW: 'view',
-  MAILBOX: 'mailbox',
-  ALL: 'all',
-  MENTIONED: 'mentioned'
+  ADDRESS: 'address'
 }
 
 export const CONVERSATION_DEFAULT_STATUSES = {

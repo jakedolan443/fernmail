@@ -527,7 +527,7 @@ func (m *Manager) QueueReply(media []mmodels.Media, inboxID, senderID, contactID
 			return message, envelope.NewError(envelope.GeneralError, m.i18n.Ts("globals.messages.empty", "name", "`to`"), nil)
 		}
 		sourceFrom := inboxRecord.From
-		if alias := m.emailAliasForConversationUUID(conversationUUID); alias != "" {
+		if alias := m.emailAddressForConversationUUID(conversationUUID); alias != "" {
 			metaMap["email_alias"] = alias
 			sourceFrom = alias
 		}
@@ -1145,8 +1145,13 @@ func (m *Manager) findOrCreateConversation(in models.IncomingMessage) (int, stri
 		if in.EmailAlias != "" {
 			conversationMeta["email_alias"] = in.EmailAlias
 		}
+		addressID, err := m.resolveIncomingAddress(in.InboxID, in.EmailAlias)
+		if err != nil {
+			return 0, "", false, err
+		}
 		conversationID, conversationUUID, err = m.CreateConversation(in.Contact.ID,
 			in.InboxID,
+			addressID,
 			lastMessage,
 			lastMessageAt,
 			in.Subject,
@@ -1168,6 +1173,28 @@ func (m *Manager) findOrCreateConversation(in models.IncomingMessage) (int, stri
 		return 0, "", false, err
 	}
 	return conversationID, conversationUUID, false, nil
+}
+
+// resolveIncomingAddress converts the transport receiver's recipient match into
+// a first-class address. The primary mailbox is the safe fallback for mail
+// providers which do not retain the envelope recipient in a header.
+func (m *Manager) resolveIncomingAddress(inboxID int, recipient string) (int, error) {
+	var id int
+	if recipient != "" {
+		err := m.db.Get(&id, `SELECT id FROM email_addresses
+			WHERE inbox_id=$1 AND enabled AND lower(address)=lower($2)`, inboxID, recipient)
+		if err == nil {
+			return id, nil
+		}
+		if err != sql.ErrNoRows {
+			return 0, err
+		}
+	}
+	if err := m.db.Get(&id, `SELECT id FROM email_addresses
+		WHERE inbox_id=$1 AND enabled AND kind='mailbox' ORDER BY id LIMIT 1`, inboxID); err != nil {
+		return 0, fmt.Errorf("resolving incoming address for inbox %d: %w", inboxID, err)
+	}
+	return id, nil
 }
 
 // messageExistsBySourceID returns conversation ID if a message with any of the given source IDs exists.
@@ -1375,7 +1402,7 @@ func (m *Manager) emailFromAddress(inb inbox.Inbox, message models.Message) stri
 	from := inb.FromAddress()
 	alias := emailAliasFromMessageMeta(message.Meta)
 	if alias == "" {
-		alias = m.emailAliasForConversationID(message.ConversationID)
+		alias = m.emailAddressForConversationID(message.ConversationID)
 	}
 	if alias != "" {
 		from = alias
@@ -1444,25 +1471,27 @@ func emailAliasFromMessageMeta(raw json.RawMessage) string {
 	return strings.TrimSpace(alias)
 }
 
-func (m *Manager) emailAliasForConversationID(conversationID int) string {
+func (m *Manager) emailAddressForConversationID(conversationID int) string {
 	if conversationID <= 0 {
 		return ""
 	}
 	var alias string
-	if err := m.db.Get(&alias, `SELECT COALESCE(meta->>'email_alias', '') FROM conversations WHERE id=$1`, conversationID); err != nil {
-		m.lo.Error("error fetching conversation email alias", "conversation_id", conversationID, "error", err)
+	if err := m.db.Get(&alias, `SELECT COALESCE(a.address, c.meta->>'email_alias', '')
+		FROM conversations c LEFT JOIN email_addresses a ON a.id=c.address_id WHERE c.id=$1`, conversationID); err != nil {
+		m.lo.Error("error fetching conversation address", "conversation_id", conversationID, "error", err)
 		return ""
 	}
 	return alias
 }
 
-func (m *Manager) emailAliasForConversationUUID(conversationUUID string) string {
+func (m *Manager) emailAddressForConversationUUID(conversationUUID string) string {
 	if conversationUUID == "" {
 		return ""
 	}
 	var alias string
-	if err := m.db.Get(&alias, `SELECT COALESCE(meta->>'email_alias', '') FROM conversations WHERE uuid=$1`, conversationUUID); err != nil {
-		m.lo.Error("error fetching conversation email alias", "conversation_uuid", conversationUUID, "error", err)
+	if err := m.db.Get(&alias, `SELECT COALESCE(a.address, c.meta->>'email_alias', '')
+		FROM conversations c LEFT JOIN email_addresses a ON a.id=c.address_id WHERE c.uuid=$1`, conversationUUID); err != nil {
+		m.lo.Error("error fetching conversation address", "conversation_uuid", conversationUUID, "error", err)
 		return ""
 	}
 	return alias

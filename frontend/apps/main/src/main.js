@@ -28,7 +28,10 @@ async function initApp() {
   const config = (await api.getConfig()).data.data
   const emitter = mitt()
   const lang = config['app.lang'] || 'en-US'
-  const langMessages = await api.getLanguage(lang)
+  const [langMessages, fallbackMessages] = await Promise.all([
+    api.getLanguage(lang),
+    lang === 'en-US' ? Promise.resolve(null) : api.getLanguage('en-US')
+  ])
 
   // Set favicon.
   if (config['app.favicon_url']) setFavicon(config['app.favicon_url'])
@@ -39,6 +42,7 @@ async function initApp() {
     locale: lang,
     fallbackLocale: 'en-US',
     messages: {
+      'en-US': fallbackMessages?.data || langMessages.data,
       [lang]: langMessages.data
     }
   }

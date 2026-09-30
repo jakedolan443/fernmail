@@ -44,15 +44,15 @@ type Config struct {
 	FromNameTemplate     string       `json:"from_name_template"`
 	ReplyTo              string       `json:"reply_to"`
 	EnablePlusAddressing bool         `json:"enable_plus_addressing"`
-	EmailAliases         []EmailAlias `json:"email_aliases"`
+	// EmailAliases is derived runtime configuration generated from canonical
+	// email_addresses. It remains here only because the IMAP receiver consumes
+	// a compact delivery list.
+	EmailAliases []EmailAlias `json:"email_aliases"`
 }
 
-// EmailAlias is a logical address served by a physical email inbox.
-//
-// Aliases intentionally live in the email channel configuration rather than
-// becoming separate inbox records. A single IMAP mailbox is polled once, and
-// the recipient address is retained on the conversation to select the correct
-// From address for replies.
+// EmailAlias is the receiver's derived representation of a canonical address.
+// A single IMAP mailbox is polled once while the address model retains the
+// recipient endpoint and selects the correct From address for replies.
 type EmailAlias struct {
 	Address     string `json:"address"`
 	Name        string `json:"name"`

@@ -22,12 +22,12 @@ export const adminNavItems = [
     isTitleKeyPlural: true,
     children: [
       {
-        titleKey: 'globals.terms.inbox',
-        href: '/admin/inboxes',
-        createRouteName: 'new-inbox',
+        titleKey: 'address.title',
+        href: '/admin/addresses',
+        createRouteName: 'new-address',
         permission: 'inboxes:manage',
         isTitleKeyPlural: true,
-        icon: 'Inbox'
+        icon: 'Mail'
       }
     ]
   },
@@ -41,15 +41,6 @@ export const adminNavItems = [
         permission: 'status:manage',
         isTitleKeyPlural: true,
         icon: 'CircleDot'
-      },
-
-      {
-        titleKey: 'globals.terms.sharedView',
-        href: '/admin/conversations/shared-views',
-        createRouteName: 'new-shared-view',
-        permission: 'shared_views:manage',
-        isTitleKeyPlural: true,
-        icon: 'Eye'
       },
       {
         titleKey: 'globals.terms.template',
