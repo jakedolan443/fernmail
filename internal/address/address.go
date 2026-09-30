@@ -134,14 +134,15 @@ func (m *Manager) GetForInbox(inboxID int) ([]Address, error) {
 func (m *Manager) GetAccessible(userID int) ([]Address, error) {
 	items := []Address{}
 	err := m.db.Select(&items, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled, restricted
-		FROM email_addresses WHERE can_access_email_address(id, $1) ORDER BY lower(address), id`, userID)
+		FROM email_addresses WHERE can_access_email_address(id, $1)
+		ORDER BY CASE WHEN kind='mailbox' THEN 0 ELSE 1 END, lower(address), id`, userID)
 	return items, err
 }
 
 func (m *Manager) GetAll() ([]Address, error) {
 	items := []Address{}
 	if err := m.db.Select(&items, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled, restricted
-		FROM email_addresses ORDER BY lower(address), id`); err != nil {
+		FROM email_addresses ORDER BY CASE WHEN kind='mailbox' THEN 0 ELSE 1 END, lower(address), id`); err != nil {
 		return nil, err
 	}
 	for i := range items {

@@ -32,6 +32,7 @@ import { useAddressNavigation } from '@main/composables/useAddressNavigation'
 import { navIconMap } from '@main/constants/navIcons'
 import { filterNavItems } from '@main/utils/nav-permissions'
 import MobileDrawerFooter from './MobileDrawerFooter.vue'
+import MobileSidebarSwipeArea from './MobileSidebarSwipeArea.vue'
 import SidebarCountBadge from './SidebarCountBadge.vue'
 import FernmailLogo from '@main/components/brand/FernmailLogo.vue'
 
@@ -66,6 +67,8 @@ watch(
 
 const sidebarOpen = useStorage('mainSidebarOpen', true)
 const addressesOpen = useStorage('addressesSectionOpen', true)
+const beginsAliasSection = (address, index) =>
+  address.kind === 'alias' && index > 0 && addressStore.addresses[index - 1]?.kind === 'mailbox'
 
 onMounted(() => {
   addressStore.fetchAddresses()
@@ -168,7 +171,14 @@ onMounted(() => {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
-                      <SidebarMenuSubItem v-for="address in addressStore.addresses" :key="address.id">
+                      <SidebarMenuSubItem
+                        v-for="(address, index) in addressStore.addresses"
+                        :key="address.id"
+                        :class="{
+                          'address-alias-start': beginsAliasSection(address, index),
+                          'mobile-address-item': true
+                        }"
+                      >
                         <SidebarMenuButton
                           size="sm"
                           :isActive="String(route.params.addressID) === String(address.id)"
@@ -198,7 +208,9 @@ onMounted(() => {
       </Sidebar>
     </template>
 
-    <SidebarInset class="!h-full !min-h-0 bg-canvas"><slot /></SidebarInset>
+    <MobileSidebarSwipeArea>
+      <SidebarInset class="!h-full !min-h-0 bg-canvas"><slot /></SidebarInset>
+    </MobileSidebarSwipeArea>
   </SidebarProvider>
 </template>
 
@@ -214,5 +226,15 @@ onMounted(() => {
 :deep(.group\/sidebar-wrapper) {
   min-height: auto !important;
   height: 100%;
+}
+
+:deep(.address-alias-start) {
+  @apply mt-2 border-t border-sidebar-border pt-2;
+}
+
+@media (max-width: 767px) {
+  :deep(.mobile-address-item + .mobile-address-item) {
+    margin-top: 0.2rem;
+  }
 }
 </style>

@@ -5,6 +5,18 @@ import { useEmitter } from '@/composables/useEmitter'
 import { EMITTER_EVENTS } from '@/constants/emitterEvents'
 import api from '@/api'
 
+export const orderAddresses = (addresses) =>
+  [...addresses].sort((left, right) => {
+    const kindOrder = (address) => (address.kind === 'mailbox' ? 0 : 1)
+    const kindDifference = kindOrder(left) - kindOrder(right)
+    if (kindDifference) return kindDifference
+
+    const addressDifference = String(left.address).localeCompare(String(right.address))
+    if (addressDifference) return addressDifference
+
+    return Number(left.id) - Number(right.id)
+  })
+
 // Addresses are the product-facing mail endpoints. A transport mailbox may
 // back several addresses, but agents should never need to reason about that in
 // the main workspace.
@@ -21,7 +33,7 @@ export const useAddressStore = defineStore('address', () => {
     loading.value = true
     try {
       const response = await api.getAddresses()
-      addresses.value = response?.data?.data || []
+      addresses.value = orderAddresses(response?.data?.data || [])
     } catch (error) {
       emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {
         variant: 'destructive',

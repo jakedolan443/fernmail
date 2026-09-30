@@ -61,3 +61,65 @@ func TestAddressLifecyclePreservesHistoricalRouting(t *testing.T) {
 		t.Fatalf("renaming primary error = %v", err)
 	}
 }
+
+func TestAccessibleAddressesListMailboxesBeforeAliases(t *testing.T) {
+	db := testutil.NewDB(t, "address_ordering")
+	manager, err := New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var firstInboxID, secondInboxID, agentID int
+	if err := db.Get(&firstInboxID, `INSERT INTO inboxes(name, channel, "from") VALUES ('Director transport', 'email', 'director@example.test') RETURNING id`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Get(&secondInboxID, `INSERT INTO inboxes(name, channel, "from") VALUES ('Support transport', 'email', 'support@example.test') RETURNING id`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Get(&agentID, `INSERT INTO users(type, email, first_name) VALUES ('agent', 'agent@example.test', 'Agent') RETURNING id`); err != nil {
+		t.Fatal(err)
+	}
+
+	director, err := manager.EnsureMailboxAddress(firstInboxID, "director@example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	support, err := manager.EnsureMailboxAddress(secondInboxID, "support@example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, address := range []Address{
+		{ID: director.ID, InboxID: firstInboxID, Address: director.Address, Kind: KindMailbox, Enabled: true, Restricted: true, UserIDs: []int{agentID}},
+		{ID: support.ID, InboxID: secondInboxID, Address: support.Address, Kind: KindMailbox, Enabled: true, Restricted: true, UserIDs: []int{agentID}},
+	} {
+		if _, err := manager.Update(address.ID, address); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, address := range []Address{
+		{InboxID: firstInboxID, Address: "billing@example.test", Kind: KindAlias, Enabled: true, Restricted: true, UserIDs: []int{agentID}},
+		{InboxID: secondInboxID, Address: "contact@example.test", Kind: KindAlias, Enabled: true, Restricted: true, UserIDs: []int{agentID}},
+	} {
+		if _, err := manager.Create(address); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	addresses, err := manager.GetAccessible(agentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, len(addresses))
+	for i, address := range addresses {
+		got[i] = address.Address
+	}
+	want := []string{
+		"director@example.test",
+		"support@example.test",
+		"billing@example.test",
+		"contact@example.test",
+	}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("accessible address order = %v, want %v", got, want)
+	}
+}
