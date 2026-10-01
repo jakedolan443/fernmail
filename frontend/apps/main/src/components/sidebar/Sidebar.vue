@@ -205,7 +205,7 @@ onMounted(() => {
                           :isActive="isActiveAddress(address.id)"
                           :title="addressLabel(address) + ' · ' + address.address"
                           :class="[
-                            '!h-auto min-h-12 items-start px-2.5 py-2.5 max-md:min-h-16 max-md:rounded-xl max-md:border max-md:border-sidebar-border max-md:bg-sidebar-accent/30 max-md:px-3 max-md:py-3 max-md:shadow-sm',
+                            '!h-auto min-h-12 items-start px-2.5 py-2.5 max-md:min-h-16 max-md:rounded-xl max-md:border max-md:border-sidebar-border/80 max-md:bg-sidebar-accent/80 max-md:px-3 max-md:py-3 max-md:shadow-sm',
                             {
                               'opacity-60': !address.enabled,
                               'max-md:border-success/50 max-md:bg-success/10': isActiveAddress(
