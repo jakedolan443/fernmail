@@ -80,7 +80,7 @@ onMounted(() => {
 
 <template>
   <SidebarProvider
-    style="--sidebar-width: 14rem"
+    style="--sidebar-width: 18rem"
     :default-open="sidebarOpen"
     v-on:update:open="sidebarOpen = $event"
   >
@@ -218,19 +218,19 @@ onMounted(() => {
                               : address.address
                           "
                           :class="[
-                            '!h-auto min-h-10 items-start px-2.5 py-2',
+                            '!h-auto min-h-11 items-start px-2.5 py-2',
                             { 'opacity-60': !address.enabled }
                           ]"
                           @click="navigateToAddress(address.id)"
                         >
                           <Mail class="mt-0.5 h-4 w-4" />
                           <span class="min-w-0 flex-1 truncate">
-                            <span class="block truncate text-sm leading-5 font-medium">{{
+                            <span class="block truncate text-base leading-6 font-medium">{{
                               address.address
                             }}</span>
                             <span
                               v-if="address.display_name"
-                              class="block truncate text-xs leading-4 text-muted-foreground"
+                              class="block truncate text-sm leading-5 text-muted-foreground"
                               >{{ address.display_name }}</span
                             >
                           </span>
