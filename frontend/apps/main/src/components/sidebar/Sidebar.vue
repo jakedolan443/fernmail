@@ -48,6 +48,7 @@ const { navigateToAddress } = useAddressNavigation()
 const isActiveParent = (parentHref) => route.path.startsWith(parentHref)
 const isMailRoute = (path) =>
   path.startsWith('/addresses') || path.startsWith('/search') || path.startsWith('/conversation')
+const isActiveAddress = (addressID) => String(route.params.addressID) === String(addressID)
 const filteredAdminNavItems = computed(() => filterNavItems(adminNavItems, userStore.can))
 
 const openAdminCollapsible = ref(null)
@@ -197,15 +198,20 @@ onMounted(() => {
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <SidebarMenu>
+                    <SidebarMenu class="max-md:gap-2">
                       <SidebarMenuItem v-for="address in addressStore.addresses" :key="address.id">
                         <SidebarMenuButton
                           size="default"
-                          :isActive="String(route.params.addressID) === String(address.id)"
+                          :isActive="isActiveAddress(address.id)"
                           :title="addressLabel(address) + ' · ' + address.address"
                           :class="[
-                            '!h-auto min-h-12 items-start px-2.5 py-2.5 max-md:min-h-14',
-                            { 'opacity-60': !address.enabled }
+                            '!h-auto min-h-12 items-start px-2.5 py-2.5 max-md:min-h-16 max-md:rounded-xl max-md:border max-md:border-sidebar-border max-md:bg-sidebar-accent/30 max-md:px-3 max-md:py-3 max-md:shadow-sm',
+                            {
+                              'opacity-60': !address.enabled,
+                              'max-md:border-success/50 max-md:bg-success/10': isActiveAddress(
+                                address.id
+                              )
+                            }
                           ]"
                           @click="navigateToAddress(address.id)"
                         >
