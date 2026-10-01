@@ -4,8 +4,11 @@
       <Button
         variant="ghost"
         size="icon"
-        class="shrink-0"
-        :class="notifications.active ? 'text-success hover:text-success' : 'text-muted-foreground'"
+        :class="[
+          'shrink-0',
+          buttonClass,
+          notifications.active ? 'text-success hover:text-success' : 'text-muted-foreground'
+        ]"
         :aria-label="t('mailNotifications.title')"
         :title="t('mailNotifications.title')"
       >
@@ -61,6 +64,10 @@ import { useEventListener } from '@vueuse/core'
 import { Button } from '@shared-ui/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@shared-ui/components/ui/popover'
 import { useBrowserNotificationsStore } from '@main/stores/browserNotifications'
+
+defineProps({
+  buttonClass: { type: String, default: '' }
+})
 
 const { t } = useI18n()
 const notifications = useBrowserNotificationsStore()

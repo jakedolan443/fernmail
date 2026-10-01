@@ -1,9 +1,9 @@
 <template>
   <div class="h-full flex flex-col">
     <!-- Header -->
-    <div class="flex items-center space-x-4 px-2 h-12 border-b shrink-0">
+    <div class="flex min-w-0 items-center gap-2 px-2 h-12 border-b shrink-0">
       <SidebarTrigger class="cursor-pointer" />
-      <span class="text-xl font-semibold">{{ title }}</span>
+      <span class="min-w-0 flex-1 truncate text-xl font-semibold" :title="title">{{ title }}</span>
     </div>
 
     <!-- Bulk Action Toolbar (when items selected) -->
@@ -63,6 +63,7 @@
     <!-- Content -->
     <div class="relative min-h-0 flex-grow overflow-hidden">
       <div
+        v-if="pullDistance > 0"
         class="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-14 items-center justify-center gap-2 text-sm font-medium text-muted-foreground"
         :class="{ 'transition-transform duration-200 ease-out': !isPulling }"
         :style="indicatorStyle"
@@ -216,6 +217,7 @@ const {
   indicatorText,
   isPulling,
   movePull,
+  pullDistance,
   refreshing,
   resetPull,
   scrollElement,

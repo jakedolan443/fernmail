@@ -1,6 +1,6 @@
 <script setup>
 import { adminNavItems } from '../../constants/navigation'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   Collapsible,
   CollapsibleContent,
@@ -20,7 +20,7 @@ import {
   SidebarMenuSubItem,
   SidebarProvider
 } from '@shared-ui/components/ui/sidebar'
-import { ChevronRight, Mail, Search } from 'lucide-vue-next'
+import { ArrowLeft, ChevronRight, Mail, Search } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
@@ -29,6 +29,7 @@ import { useUserStore } from '@main/stores/user'
 import { useAddressStore } from '@main/stores/address'
 import { useConversationStore } from '@main/stores/conversation'
 import { useAddressNavigation } from '@main/composables/useAddressNavigation'
+import { Button } from '@shared-ui/components/ui/button'
 import { navIconMap } from '@main/constants/navIcons'
 import { filterNavItems } from '@main/utils/nav-permissions'
 import MobileDrawerFooter from './MobileDrawerFooter.vue'
@@ -41,6 +42,7 @@ const addressStore = useAddressStore()
 const conversationStore = useConversationStore()
 const settingsStore = useAppSettingsStore()
 const route = useRoute()
+const router = useRouter()
 const { t } = useI18n()
 const { navigateToAddress } = useAddressNavigation()
 
@@ -85,11 +87,22 @@ onMounted(() => {
     <template v-if="route.matched.some((record) => record.name && record.name.startsWith('admin'))">
       <Sidebar collapsible="offcanvas" class="sidebar-secondary">
         <SidebarHeader>
+          <Button
+            variant="default"
+            class="h-10 w-full justify-start bg-success px-3 text-success-foreground hover:bg-success/90"
+            @click="router.push('/addresses')"
+          >
+            <ArrowLeft class="h-4 w-4" aria-hidden="true" />
+            Back to addresses
+          </Button>
           <SidebarMenu>
             <SidebarMenuItem>
               <div class="flex w-full flex-col items-start justify-between px-1">
                 <span class="text-xl font-semibold">{{ t('globals.terms.admin') }}</span>
-                <div v-if="settingsStore.settings['app.version']" class="text-xs text-muted-foreground">
+                <div
+                  v-if="settingsStore.settings['app.version']"
+                  class="text-xs text-muted-foreground"
+                >
                   {{ settingsStore.settings['app.version'] }}
                 </div>
               </div>
@@ -100,8 +113,14 @@ onMounted(() => {
           <SidebarGroup>
             <SidebarMenu>
               <SidebarMenuItem v-for="item in filteredAdminNavItems" :key="item.titleKey">
-                <SidebarMenuButton v-if="!item.children" :isActive="isActiveParent(item.href)" asChild>
-                  <router-link :to="item.href"><span>{{ t(item.titleKey) }}</span></router-link>
+                <SidebarMenuButton
+                  v-if="!item.children"
+                  :isActive="isActiveParent(item.href)"
+                  asChild
+                >
+                  <router-link :to="item.href"
+                    ><span>{{ t(item.titleKey) }}</span></router-link
+                  >
                 </SidebarMenuButton>
                 <Collapsible
                   v-else
@@ -116,8 +135,11 @@ onMounted(() => {
                         v-if="item.badge"
                         variant="outline"
                         class="ml-1.5 shrink-0 rounded-full border-warning/50 bg-warning/10 px-[5.5px] py-[3px] text-[9px] font-medium leading-none tracking-[0.07em] text-warning-600 uppercase"
-                      >{{ item.badge }}</Badge>
-                      <ChevronRight class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                        >{{ item.badge }}</Badge
+                      >
+                      <ChevronRight
+                        class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
+                      />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
@@ -126,7 +148,9 @@ onMounted(() => {
                         <SidebarMenuButton size="sm" :isActive="isActiveParent(child.href)" asChild>
                           <router-link :to="child.href">
                             <component :is="navIconMap[child.icon]" v-if="child.icon" />
-                            <span>{{ t(child.titleKey, child.isTitleKeyPlural === true ? 2 : 1) }}</span>
+                            <span>{{
+                              t(child.titleKey, child.isTitleKeyPlural === true ? 2 : 1)
+                            }}</span>
                           </router-link>
                         </SidebarMenuButton>
                       </SidebarMenuSubItem>
@@ -151,7 +175,11 @@ onMounted(() => {
                   <FernmailLogo :name="settingsStore.settings['app.site_name'] || 'Fernmail'" />
                 </div>
                 <router-link :to="{ name: 'search' }" class="mr-1 mt-1 transition-colors">
-                  <Search size="18" stroke-width="2.5" class="text-muted-foreground hover:text-foreground" />
+                  <Search
+                    size="18"
+                    stroke-width="2.5"
+                    class="text-muted-foreground hover:text-foreground"
+                  />
                 </router-link>
               </div>
             </SidebarMenuItem>
@@ -166,7 +194,9 @@ onMounted(() => {
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton class="!p-2">
                       <span class="sidebar-section-label">Addresses</span>
-                      <ChevronRight class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                      <ChevronRight
+                        class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
+                      />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
@@ -180,16 +210,29 @@ onMounted(() => {
                         }"
                       >
                         <SidebarMenuButton
-                          size="sm"
+                          size="default"
                           :isActive="String(route.params.addressID) === String(address.id)"
-                          :title="address.display_name ? `${address.address} · ${address.display_name}` : address.address"
-                          :class="{ 'opacity-60': !address.enabled }"
+                          :title="
+                            address.display_name
+                              ? `${address.address} · ${address.display_name}`
+                              : address.address
+                          "
+                          :class="[
+                            '!h-auto min-h-10 items-start px-2.5 py-2',
+                            { 'opacity-60': !address.enabled }
+                          ]"
                           @click="navigateToAddress(address.id)"
                         >
-                          <Mail />
+                          <Mail class="mt-0.5 h-4 w-4" />
                           <span class="min-w-0 flex-1 truncate">
-                            <span class="block truncate">{{ address.address }}</span>
-                            <span v-if="address.display_name" class="block truncate text-[10px] text-muted-foreground">{{ address.display_name }}</span>
+                            <span class="block truncate text-sm leading-5 font-medium">{{
+                              address.address
+                            }}</span>
+                            <span
+                              v-if="address.display_name"
+                              class="block truncate text-xs leading-4 text-muted-foreground"
+                              >{{ address.display_name }}</span
+                            >
                           </span>
                           <SidebarCountBadge
                             :count="conversationStore.sidebarCounts.addresses?.[address.id] || 0"
