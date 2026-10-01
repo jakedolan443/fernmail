@@ -16,8 +16,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
   SidebarProvider
 } from '@shared-ui/components/ui/sidebar'
 import { ArrowLeft, ChevronRight, Mail, Search } from 'lucide-vue-next'
@@ -32,6 +30,7 @@ import { useAddressNavigation } from '@main/composables/useAddressNavigation'
 import { Button } from '@shared-ui/components/ui/button'
 import { navIconMap } from '@main/constants/navIcons'
 import { filterNavItems } from '@main/utils/nav-permissions'
+import { addressLabel } from '@main/utils/address-display'
 import MobileDrawerFooter from './MobileDrawerFooter.vue'
 import MobileSidebarSwipeArea from './MobileSidebarSwipeArea.vue'
 import SidebarCountBadge from './SidebarCountBadge.vue'
@@ -69,8 +68,6 @@ watch(
 
 const sidebarOpen = useStorage('mainSidebarOpen', true)
 const addressesOpen = useStorage('addressesSectionOpen', true)
-const beginsAliasSection = (address, index) =>
-  address.kind === 'alias' && index > 0 && addressStore.addresses[index - 1]?.kind === 'mailbox'
 
 onMounted(() => {
   addressStore.fetchAddresses()
@@ -193,54 +190,49 @@ onMounted(() => {
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton class="!p-2">
-                      <span class="sidebar-section-label">Addresses</span>
+                      <span class="text-sm font-medium text-muted-foreground">Addresses</span>
                       <ChevronRight
                         class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
                       />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <SidebarMenuSub>
-                      <SidebarMenuSubItem
-                        v-for="(address, index) in addressStore.addresses"
-                        :key="address.id"
-                        :class="{
-                          'address-alias-start': beginsAliasSection(address, index),
-                          'mobile-address-item': true
-                        }"
-                      >
+                    <SidebarMenu>
+                      <SidebarMenuItem v-for="address in addressStore.addresses" :key="address.id">
                         <SidebarMenuButton
                           size="default"
                           :isActive="String(route.params.addressID) === String(address.id)"
-                          :title="
-                            address.display_name
-                              ? `${address.address} · ${address.display_name}`
-                              : address.address
-                          "
+                          :title="addressLabel(address) + ' · ' + address.address"
                           :class="[
-                            '!h-auto min-h-11 items-start px-2.5 py-2',
+                            '!h-auto min-h-12 items-start px-2.5 py-2.5 max-md:min-h-14',
                             { 'opacity-60': !address.enabled }
                           ]"
                           @click="navigateToAddress(address.id)"
                         >
-                          <Mail class="mt-0.5 h-4 w-4" />
+                          <Mail class="mt-0.5 h-4 w-4 max-md:mt-1 max-md:h-5 max-md:w-5" />
                           <span class="min-w-0 flex-1 truncate">
-                            <span class="block truncate text-base leading-6 font-medium">{{
-                              address.address
-                            }}</span>
                             <span
-                              v-if="address.display_name"
-                              class="block truncate text-sm leading-5 text-muted-foreground"
-                              >{{ address.display_name }}</span
+                              class="block truncate text-base leading-6 font-medium max-md:text-lg"
                             >
+                              {{ addressLabel(address) }}
+                            </span>
+                            <span
+                              class="block truncate text-sm leading-5 text-muted-foreground max-md:text-base"
+                            >
+                              {{ address.address }}
+                            </span>
                           </span>
                           <SidebarCountBadge
                             :count="conversationStore.sidebarCounts.addresses?.[address.id] || 0"
-                            :ariaLabel="`${conversationStore.sidebarCounts.addresses?.[address.id] || 0} unread messages for ${address.address}`"
+                            :ariaLabel="
+                              String(conversationStore.sidebarCounts.addresses?.[address.id] || 0) +
+                              ' unread messages for ' +
+                              address.address
+                            "
                           />
                         </SidebarMenuButton>
-                      </SidebarMenuSubItem>
-                    </SidebarMenuSub>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
                   </CollapsibleContent>
                 </SidebarMenuItem>
               </SidebarMenu>
@@ -269,15 +261,5 @@ onMounted(() => {
 :deep(.group\/sidebar-wrapper) {
   min-height: auto !important;
   height: 100%;
-}
-
-:deep(.address-alias-start) {
-  @apply mt-2 border-t border-sidebar-border pt-2;
-}
-
-@media (max-width: 767px) {
-  :deep(.mobile-address-item + .mobile-address-item) {
-    margin-top: 0.2rem;
-  }
 }
 </style>
