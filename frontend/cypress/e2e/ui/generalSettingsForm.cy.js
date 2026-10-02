@@ -126,7 +126,11 @@ describe('General settings form', () => {
       { contents: Cypress.Buffer.from(onePixelPNG, 'base64'), fileName: 'logo.png', mimeType: 'image/png' },
       { force: true }
     )
-    cy.wait('@uploadLogo').its('response.body.data.url').should('match', /^\/uploads\/[0-9a-f-]{36}$/)
+    // Report the server's answer, not just a missing property, when the upload fails.
+    cy.wait('@uploadLogo').then(({ response }) => {
+      expect(response.statusCode, JSON.stringify(response.body)).to.eq(200)
+      expect(response.body.data.url).to.match(/^\/uploads\/[0-9a-f-]{36}$/)
+    })
     cy.get('input[name="site_name"]').closest('form').find('button[type="submit"]').click()
     cy.wait('@saveGeneral').its('response.statusCode').should('eq', 200)
 
