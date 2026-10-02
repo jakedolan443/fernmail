@@ -118,7 +118,8 @@ describe('General settings form', () => {
   })
 
   it('uploads a site logo that becomes the favicon', () => {
-    cy.intercept('POST', '**/api/v1/settings/general/logo').as('uploadLogo')
+    // The upload is deliberately not intercepted: Cypress's proxy re-encodes an
+    // intercepted multipart body as UTF-8, which corrupts the PNG's bytes.
     cy.intercept('PUT', '**/api/v1/settings/general').as('saveGeneral')
 
     cy.visit(path)
@@ -126,11 +127,11 @@ describe('General settings form', () => {
       { contents: Cypress.Buffer.from(onePixelPNG, 'base64'), fileName: 'logo.png', mimeType: 'image/png' },
       { force: true }
     )
-    // Report the server's answer, not just a missing property, when the upload fails.
-    cy.wait('@uploadLogo').then(({ response }) => {
-      expect(response.statusCode, JSON.stringify(response.body)).to.eq(200)
-      expect(response.body.data.url).to.match(/^\/uploads\/[0-9a-f-]{36}$/)
-    })
+    cy.get('input[name="site_name"]')
+      .closest('form')
+      .find('img[src^="/uploads/"]')
+      .should('have.attr', 'src')
+      .and('match', /^\/uploads\/[0-9a-f-]{36}$/)
     cy.get('input[name="site_name"]').closest('form').find('button[type="submit"]').click()
     cy.wait('@saveGeneral').its('response.statusCode').should('eq', 200)
 
