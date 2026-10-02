@@ -8,6 +8,9 @@ import (
 func TestMailOnlyUpgradePreservesMessagesAndDisablesRetiredFeatures(t *testing.T) {
 	db := testutil.NewDB(t, "mail_only_upgrade")
 	db.MustExec(`
+ CREATE TYPE view_visibility AS ENUM ('all', 'team', 'user');
+ CREATE TABLE views(id SERIAL PRIMARY KEY, name TEXT NOT NULL, visibility view_visibility NOT NULL,
+   filters JSONB NOT NULL DEFAULT '[]', user_id BIGINT, team_id INTEGER);
  CREATE TABLE macros(id int);
  CREATE TABLE contact_notes(id int);
  INSERT INTO inboxes (name, channel, csat_enabled) VALUES ('Mail', 'email', true), ('Old chat', 'livechat', true);

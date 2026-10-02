@@ -79,6 +79,18 @@ func V3_5_0(db *sqlx.DB, fs stuffbin.FileSystem, ko *koanf.Koanf) error {
 			if _, err := tx.Exec(`UPDATE email_addresses SET restricted = $2, updated_at = NOW() WHERE id = $1`, addressID, !policy.all); err != nil {
 				return err
 			}
+			// View visibility never bypassed the old transport ACL. Restricted
+			// transports are migrated exclusively from that ACL below, including
+			// future team membership (a team View must not become a new bypass).
+			var transportRestricted bool
+			if err := tx.Get(&transportRestricted, `SELECT EXISTS (
+				SELECT 1 FROM email_addresses a JOIN inbox_access ia ON ia.inbox_id=a.inbox_id
+				WHERE a.id=$1 AND ia.restricted)`, addressID); err != nil {
+				return err
+			}
+			if transportRestricted {
+				continue
+			}
 			for userID := range policy.userIDs {
 				if _, err := tx.Exec(`INSERT INTO email_address_users(address_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, addressID, userID); err != nil {
 					return err

@@ -13,7 +13,6 @@ describe('General settings form', () => {
     'app.root_url',
     'app.allowed_file_upload_extensions',
     'app.timezone',
-    'app.business_hours_id',
     'app.show_conversation_subject'
   ]
 
@@ -61,8 +60,8 @@ describe('General settings form', () => {
     cy.get('input[name="site_name"]')
       .should('have.value', original['app.site_name'])
       .clear()
-      .type(siteName)
-    cy.get('button[type="submit"]').click()
+    cy.get('input[name="site_name"]').type(siteName)
+    cy.get('input[name="site_name"]').closest('form').find('button[type="submit"]').click()
 
     cy.wait('@saveGeneral').its('response.statusCode').should('eq', 200)
     cy.contains('Changes saved').should('exist')
@@ -80,7 +79,7 @@ describe('General settings form', () => {
     cy.visit(path)
     cy.get('select[name="timezone"]').should('have.value', original['app.timezone'])
     pickOption('timezone', 'UTC (UTC+00:00)')
-    cy.get('button[type="submit"]').click()
+    cy.get('input[name="site_name"]').closest('form').find('button[type="submit"]').click()
 
     cy.wait('@saveGeneral').its('response.statusCode').should('eq', 200)
 
@@ -98,8 +97,8 @@ describe('General settings form', () => {
     cy.get('input[name="root_url"]')
       .should('not.have.value', '')
       .clear()
-      .type('definitely not a url')
-    cy.get('button[type="submit"]').click()
+    cy.get('input[name="root_url"]').type('definitely not a url')
+    cy.get('input[name="site_name"]').closest('form').find('button[type="submit"]').click()
 
     cy.contains('Root URL should be a valid URL').should('exist')
     cy.get('@saveGeneral.all').should('have.length', 0)
@@ -110,7 +109,7 @@ describe('General settings form', () => {
 
     cy.visit(path)
     cy.get('input[name="site_name"]').should('not.have.value', '').clear()
-    cy.get('button[type="submit"]').click()
+    cy.get('input[name="site_name"]').closest('form').find('button[type="submit"]').click()
 
     cy.contains('Site name should be at least 1 character').should('exist')
     cy.get('@saveGeneral.all').should('have.length', 0)

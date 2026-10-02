@@ -93,3 +93,48 @@ func TestAddressFirstUpgradeCopiesLegacyRestrictedMailboxAccess(t *testing.T) {
 		t.Fatalf("restricted address: restricted=%v err=%v", restricted, err)
 	}
 }
+
+func TestAddressUpgradeDoesNotPromoteDeniedViewMembers(t *testing.T) {
+	db := testutil.NewDB(t, "address_upgrade_denied_view")
+	db.MustExec(`
+ CREATE TYPE view_visibility AS ENUM ('all','team','user');
+ CREATE TABLE views(id SERIAL PRIMARY KEY,name TEXT,visibility view_visibility,user_id BIGINT,team_id INTEGER,filters JSONB);
+ INSERT INTO users(type,email,first_name) VALUES ('agent','allowed@test','Allowed'),('agent','denied@test','Denied');
+ INSERT INTO inboxes(name,channel,"from",config) VALUES ('Restricted','email','mail@test',
+  '{"email_aliases":[{"address":"mail@test","default":true,"enabled":true},{"address":"alias@test","enabled":true}]}');
+ INSERT INTO inbox_access(inbox_id,restricted) SELECT id,true FROM inboxes;
+ INSERT INTO inbox_users(inbox_id,user_id) SELECT i.id,u.id FROM inboxes i CROSS JOIN users u WHERE u.email='allowed@test';
+ INSERT INTO teams(name,conversation_assignment_type) VALUES ('Mixed','Manual');
+ INSERT INTO team_members(team_id,user_id) SELECT t.id,u.id FROM teams t CROSS JOIN users u WHERE u.email IN ('allowed@test','denied@test');
+ INSERT INTO views(name,visibility,user_id,filters) SELECT 'Personal','user',id,
+  '[{"field":"email_alias","operator":"equals","value":"alias@test"}]' FROM users WHERE email='denied@test';
+ INSERT INTO views(name,visibility,team_id,filters) SELECT 'Team','team',id,
+  '[{"field":"email_alias","operator":"equals","value":"alias@test"}]' FROM teams;
+ `)
+	var allowed bool
+	if err := db.Get(&allowed, `SELECT can_access_inbox(i.id,u.id) FROM inboxes i CROSS JOIN users u WHERE u.email='denied@test'`); err != nil || allowed {
+		t.Fatalf("legacy denied=%v err=%v", allowed, err)
+	}
+	for range 2 {
+		if err := V3_5_0(db, nil, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, email := range []string{"denied@test", "allowed@test"} {
+		var count int
+		if err := db.Get(&count, `SELECT count(*) FROM email_addresses a CROSS JOIN users u WHERE u.email=$1 AND can_access_email_address(a.id,u.id)`, email); err != nil {
+			t.Fatal(err)
+		}
+		want := 0
+		if email == "allowed@test" {
+			want = 2
+		}
+		if count != want {
+			t.Fatalf("%s can read %d addresses, want %d", email, count, want)
+		}
+	}
+	var grants int
+	if err := db.Get(&grants, `SELECT count(*) FROM email_address_teams`); err != nil || grants != 0 {
+		t.Fatalf("future team membership bypass: grants=%d err=%v", grants, err)
+	}
+}

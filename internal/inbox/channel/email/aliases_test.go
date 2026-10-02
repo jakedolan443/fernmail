@@ -40,3 +40,11 @@ func TestResolveRecipientAliasFallsBackToDefault(t *testing.T) {
 		t.Fatalf("alias = %q, want director@example.com", got)
 	}
 }
+
+func TestRetiredAliasRetainsRecipientOwnership(t *testing.T) {
+	aliases := testAliases()
+	aliases[1].Enabled = false
+	if got := resolveRecipientAlias(aliases, map[string]string{"Delivered-To": "billing@example.com", "To": "director@example.com"}); got != "billing@example.com" {
+		t.Fatalf("retired alias rerouted to primary: %s", got)
+	}
+}

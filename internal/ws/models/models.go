@@ -47,6 +47,8 @@ type ConversationSubscribe struct {
 
 // TypingMessage represents a typing indicator message.
 type TypingMessage struct {
+	UserID           int    `json:"user_id"`
+	UserName         string `json:"user_name"`
 	ConversationUUID string `json:"conversation_uuid"`
 	IsTyping         bool   `json:"is_typing"`
 	IsPrivateMessage bool   `json:"is_private_message"`

@@ -4,6 +4,18 @@
     <div class="flex min-w-0 items-center gap-2 px-2 h-12 border-b shrink-0">
       <SidebarTrigger class="cursor-pointer" />
       <span class="min-w-0 flex-1 truncate text-xl font-semibold" :title="title">{{ title }}</span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" variant="ghost" size="icon" :aria-label="t('address.actions')">
+            <MoreHorizontal class="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem :disabled="markingRead" @select="markAllAsRead">
+            <MailCheck class="mr-2 h-4 w-4" />{{ t('address.markAllAsRead') }}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
 
     <!-- Bulk Action Toolbar (when items selected) -->
@@ -170,10 +182,13 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Inbox, MessageCircleWarning, ChevronDown, Loader2, RefreshCw } from 'lucide-vue-next'
+import { Inbox, MessageCircleWarning, ChevronDown, Loader2, RefreshCw, MoreHorizontal, MailCheck } from 'lucide-vue-next'
+import { useEmitter } from '@/composables/useEmitter'
+import { EMITTER_EVENTS } from '@/constants/emitterEvents'
+import { handleHTTPError } from '@shared-ui/utils/http'
 import { Button } from '@shared-ui/components/ui/button'
 import {
   DropdownMenu,
@@ -196,6 +211,27 @@ const addressStore = useAddressStore()
 const { canBulkAct } = useBulkActionPermissions()
 const route = useRoute()
 const { t } = useI18n()
+const emitter = useEmitter()
+const markingRead = ref(false)
+
+async function markAllAsRead() {
+  const addressID = Number(route.params.addressID)
+  if (!addressID || markingRead.value) return
+  const addressName = addressStore.get(addressID)?.address || title.value
+  markingRead.value = true
+  try {
+    await conversationStore.markAddressAsRead(addressID)
+    emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {
+      description: t('address.markedAllAsRead', { address: addressName })
+    })
+  } catch (error) {
+    emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {
+      variant: 'destructive', description: handleHTTPError(error).message
+    })
+  } finally {
+    markingRead.value = false
+  }
+}
 
 const hasSelection = computed(() => conversationStore.selectedCount > 0)
 

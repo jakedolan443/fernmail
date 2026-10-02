@@ -52,7 +52,8 @@ watch(
 initWS()
 useIdleDetection()
 useAddressTitle()
-useEventListener(window, 'focus', () => conversationStore.fetchSidebarCounts({ force: true }))
+useEventListener(window, 'focus', () => conversationStore.resyncMail())
+useEventListener(window, 'online', () => conversationStore.retryDraftSave())
 
 onMounted(async () => {
   retireNotificationWorker()

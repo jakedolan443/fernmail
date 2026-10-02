@@ -34,6 +34,11 @@ func TestEmailStorageFullPreservesMessageAndUnavailableAttachments(t *testing.T)
 		t.Fatal(err)
 	}
 	db.Get(&conversationUUID, "SELECT uuid FROM conversations WHERE id=$1", conversationID)
+	var addressID int
+	if err := db.Get(&addressID, `INSERT INTO email_addresses(inbox_id,address,kind) VALUES($1,'quota@example.test','mailbox') RETURNING id`, inboxID); err != nil {
+		t.Fatal(err)
+	}
+	db.MustExec(`UPDATE conversations SET address_id=$2 WHERE id=$1`, conversationID, addressID)
 	db.MustExec("INSERT INTO conversation_participants (user_id,conversation_id) VALUES ($1,$2)", userID, conversationID)
 	manager, err := New(ws.NewHub(&lo, nil), i18n, nil, nil, nil, mediaManager, stubSettingsStore{}, nil, receiptWebhookStore{}, Opts{DB: db, Lo: &lo})
 	if err != nil {
@@ -91,7 +96,7 @@ func TestEmailStorageFullPreservesMessageAndUnavailableAttachments(t *testing.T)
 	manager.SignAttachmentURLs(messages[0].Attachments)
 	check(messages[0])
 	// Subsequent mailbox scans deduplicate the saved email instead of reuploading.
-	if _, err := manager.ProcessIncomingMessage(models.IncomingMessage{SourceID: null.StringFrom("quota-message")}); err != nil {
+	if _, err := manager.ProcessIncomingMessage(models.IncomingMessage{InboxID: inboxID, EmailAlias: "quota@example.test", SourceID: null.StringFrom("quota-message")}); err != nil {
 		t.Fatal(err)
 	}
 	usage, err := mediaManager.GetStorageUsage()

@@ -50,7 +50,7 @@ func handleUpsertConversationDraft(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, app.i18n.T("errors.parsingRequest"), nil, envelope.InputError)
 	}
 
-	if len(req.Meta) > maxMetaSize {
+	if len(req.Content) > 1024*1024 || len(req.Meta) > maxMetaSize {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, app.i18n.T("globals.messages.somethingWentWrong"), nil, envelope.InputError)
 	}
 
@@ -59,6 +59,9 @@ func handleUpsertConversationDraft(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, app.i18n.T("globals.messages.somethingWentWrong"), nil, envelope.InputError)
 	}
 
+	if len(req.Meta) == 0 || string(req.Meta) == "null" {
+		req.Meta = json.RawMessage(`{}`)
+	}
 	draft, err := app.conversation.UpsertConversationDraft(conv.ID, user.ID, req.Type, req.Content, req.Meta)
 	if err != nil {
 		return sendErrorEnvelope(r, err)

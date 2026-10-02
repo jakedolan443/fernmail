@@ -16,7 +16,7 @@ import (
 
 type receiptMediaStore struct{ mediaStore }
 
-func (receiptMediaStore) LinkMessageMediaTx(*sqlx.Tx, int, []mmodels.Media, []string) error {
+func (receiptMediaStore) LinkMessageMediaTx(*sqlx.Tx, int, []mmodels.Media, []string, int) error {
 	return nil
 }
 

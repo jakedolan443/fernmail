@@ -84,6 +84,8 @@ func TestConversationSearchFieldsAndRanking(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO inboxes (name, channel) VALUES ('Search test', 'email')`); err != nil {
 		t.Fatalf("inserting inbox: %v", err)
 	}
+	db.MustExec(`INSERT INTO email_addresses(inbox_id,address,kind,restricted)
+		SELECT id,'search@example.test','mailbox',false FROM inboxes WHERE name='Search test'`)
 
 	oldest := time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
 	insertSearchConversation(t, db, "108", "exact-108@example.com", "Exact", "Contact", "Old subject", oldest)
@@ -278,10 +280,11 @@ func insertSearchConversation(t *testing.T, db *sqlx.DB, reference, email, first
 
 	var conversationID int
 	if err := db.Get(&conversationID, `
-		INSERT INTO conversations (contact_id, inbox_id, status_id, reference_number, subject, last_message_at)
+		INSERT INTO conversations (contact_id, inbox_id, address_id, status_id, reference_number, subject, last_message_at)
 		VALUES (
 			$1,
 			(SELECT id FROM inboxes LIMIT 1),
+			(SELECT id FROM email_addresses LIMIT 1),
 			(SELECT id FROM conversation_statuses WHERE name = 'Open'),
 			$2,
 			$3,

@@ -69,7 +69,10 @@
 
       <!-- Typing indicator -->
       <div v-if="conversationStore.conversation.isTyping" class="px-4 pb-4">
-        <TypingIndicator />
+        <p v-if="conversationStore.typingNames(conversationStore.current.uuid)" class="text-xs text-muted-foreground" role="status">
+          {{ $t('conversation.agentsTyping', { names: conversationStore.typingNames(conversationStore.current.uuid) }) }}
+        </p>
+        <TypingIndicator v-else />
       </div>
     </div>
 

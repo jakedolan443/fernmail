@@ -190,6 +190,10 @@ func (e *Email) refreshOAuthIfNeeded() (*models.OAuthConfig, bool, error) {
 	}
 
 	e.oauthMu.Lock()
+	if e.oauth == nil {
+		e.oauthMu.Unlock()
+		return nil, false, fmt.Errorf("OAuth configuration missing for inbox %d", e.id)
+	}
 
 	// Check if token is expired
 	if !oauth.IsTokenExpired(e.oauth.ExpiresAt) {

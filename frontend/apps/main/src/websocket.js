@@ -8,6 +8,7 @@ import { EMITTER_EVENTS } from './constants/emitterEvents.js'
 import { useEmitter } from './composables/useEmitter'
 import { getI18n } from './i18n'
 import { useBrowserNotificationsStore } from './stores/browserNotifications'
+import { useUserStore } from './stores/user'
 
 export class WebSocketClient {
   constructor() {
@@ -26,6 +27,7 @@ export class WebSocketClient {
     this.browserNotifications = useBrowserNotificationsStore()
 
     this.usersStore = useUsersStore()
+    this.userStore = useUserStore()
     this.connectionStore = useConnectionStore()
     this.emitter = useEmitter()
     this.messageQueue = []
@@ -68,7 +70,7 @@ export class WebSocketClient {
     this.setupPing()
     this.flushMessageQueue()
     if (wasReconnect) {
-      this.convStore.fetchSidebarCounts({ force: true })
+      this.convStore.resyncMail()
       // RESUB!
       const uuids = this.convStore.conversations.data?.map((c) => c.uuid) || []
       this.subscribeListReplace(uuids)
@@ -89,14 +91,14 @@ export class WebSocketClient {
 
       const data = JSON.parse(event.data)
       const handlers = {
+        address_read: () => this.convStore.resyncMail(),
         addresses_updated: () => {
           this.addressStore.fetchAddresses(true)
-          this.convStore.fetchSidebarCounts({ force: true })
-          this.convStore.resetConversations()
+          this.convStore.resyncMail()
         },
         [WS_EVENT.NEW_MESSAGE]: () => {
           const uuid = data.data.conversation_uuid
-          const isOpen = this.convStore.conversation.data?.uuid === uuid
+          const isOpen = this.convStore.isViewingConversation(uuid)
           const convPayload = data.data.conversation
 
           if (convPayload) {
@@ -142,6 +144,7 @@ export class WebSocketClient {
         },
         [WS_EVENT.CONTACT_UPDATE]: () => this.convStore.mergeContactUpdate(data.data),
         [WS_EVENT.TYPING]: () => {
+          if (data.data?.user_id === this.userStore.userID) return
           this.convStore.updateTypingStatus(data.data)
         },
 

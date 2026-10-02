@@ -29,6 +29,8 @@ describe('Login Component', () => {
 
         // Visit the login page
         cy.visit('/')
+        cy.wait('@getOIDCProviders')
+        cy.get('#email', { timeout: 10000 }).should('be.visible')
     })
 
     it('should display login form', () => {
@@ -41,7 +43,6 @@ describe('Login Component', () => {
     })
 
     it('should display OIDC providers when loaded', () => {
-        cy.wait('@getOIDCProviders')
         cy.contains('button', 'Google').should('be.visible')
         cy.contains('div', 'Or continue with').should('be.visible')
     })

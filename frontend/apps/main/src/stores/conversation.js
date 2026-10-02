@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, reactive, ref, watch, watchEffect } from 'vue'
+import { computed, onScopeDispose, reactive, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { handleHTTPError } from '@shared-ui/utils/http.js'
 import { TYPING_RECEIVE_TIMEOUT } from '@shared-ui/composables/useTypingIndicator.js'
@@ -10,6 +10,7 @@ import { EMITTER_EVENTS } from '@main/constants/emitterEvents'
 import { subscribeToConversation, sendTypingIndicator, subscribeListReplace } from '@main/websocket'
 
 import MessageCache from '@main/utils/conversation-message-cache'
+import { createDraftSync } from '@main/utils/draft-sync'
 import { getI18n } from '@main/i18n'
 import { CONVERSATION_LIST_TYPE, CONVERSATION_DEFAULT_STATUSES } from '@/constants/conversation'
 import { useThrottleFn, useStorage } from '@vueuse/core'
@@ -27,6 +28,16 @@ export const useConversationStore = defineStore('conversation', () => {
   const currentCC = ref([])
 
   const drafts = ref(new Map())
+  const draftSaveStates = reactive(new Map())
+  const draftSync = createDraftSync({
+    write: (uuid, type, draft) => draft
+      ? api.saveDraft(uuid, type, draft)
+      : api.deleteDraft(uuid, type),
+    onState: (key, state) => draftSaveStates.set(key, state)
+  })
+  onScopeDispose(() => draftSync.dispose())
+  const syncDraft = (uuid, type, draft) => draftSync.save(uuid, type, draft)
+  const retryDraftSave = (uuid, type) => draftSync.retry(uuid, type)
   // In-memory, resets on reload.
   const selectedDraftType = ref(new Map())
   let resolveDraftsReady
@@ -190,8 +201,8 @@ export const useConversationStore = defineStore('conversation', () => {
     persistedListSortField.value = 'newest'
   }
 
-  let typingTimeout = null
   const typingByUUID = reactive({})
+  const typingAgentsByUUID = reactive({})
   const typingTimeoutsByUUID = new Map()
 
   const conversations = reactive({
@@ -324,6 +335,7 @@ export const useConversationStore = defineStore('conversation', () => {
   })
 
   function markConversationAsRead(uuid) {
+    if (!isViewingConversation(uuid) || document.hidden) return
     const row = conversations.data.find((conv) => conv.uuid === uuid)
     if (row) {
       const unread = row.unread_message_count || 0
@@ -422,14 +434,12 @@ export const useConversationStore = defineStore('conversation', () => {
   })
 
   function resetTypingState() {
-    conversation.isTyping = false
-    if (typingTimeout) {
-      clearTimeout(typingTimeout)
-      typingTimeout = null
-    }
+    conversation.isTyping = Boolean(typingByUUID[conversation.data?.uuid])
   }
 
+  let conversationRequestSeq = 0
   async function fetchConversation(uuid) {
+    const requestSeq = ++conversationRequestSeq
     const cached = conversationDataCache.get(uuid)
     if (cached) {
       conversation.data = cached
@@ -441,11 +451,15 @@ export const useConversationStore = defineStore('conversation', () => {
     const guard = delayedLoading(conversation, 'loading')
     try {
       const resp = await api.getConversation(uuid)
+      if (requestSeq !== conversationRequestSeq) return
       conversation.data = resp.data.data
+      conversation.errorMessage = ''
       resetTypingState()
       subscribeToConversation(uuid)
       cacheConversationData(uuid, conversation.data)
     } catch (error) {
+      if (requestSeq !== conversationRequestSeq || error.code === 'ERR_CANCELED') return
+      conversation.data = null
       conversation.errorMessage = handleHTTPError(error).message
       emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {
         variant: 'destructive',
@@ -464,6 +478,12 @@ export const useConversationStore = defineStore('conversation', () => {
         cacheConversationData(uuid, conversation.data)
       }
     } catch (error) {
+      if ([403, 404].includes(error.response?.status)) {
+        conversationDataCache.delete(uuid)
+        messages.data.purgeConversation(uuid)
+        if (conversation.data?.uuid === uuid) conversation.data = null
+        incrementMessageVersion()
+      }
       console.warn('silent conversation refetch failed', error)
     }
   }
@@ -484,41 +504,34 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   async function fetchMessages(uuid, fetchNextPage = false) {
-    if (staleConversationUUIDs.has(uuid) && messages.data.hasConversation(uuid)) {
+    if (staleConversationUUIDs.has(uuid)) {
       try {
         const response = await api.getConversationMessages(uuid, {
           page: 1,
           page_size: MESSAGE_LIST_PAGE_SIZE
         })
-        const newMessages = response.data?.data?.results || []
-        let lastAdded = null
-        for (const m of newMessages) {
-          if (!messages.data.hasMessage(uuid, m.uuid)) {
-            messages.data.addMessage(uuid, m)
-            lastAdded = m
-          }
-        }
+        const result = response.data?.data || {}
+        // A missed burst can exceed one page. Replace pagination as well as
+        // content, otherwise the middle of the thread can stay missing forever.
+        messages.data.purgeConversation(uuid)
+        messages.data.addMessages(uuid, result.results || [], result.page, result.total_pages)
         staleConversationUUIDs.delete(uuid)
-        if (lastAdded) {
-          incrementMessageVersion()
-          setTimeout(() => {
-            emitter.emit(EMITTER_EVENTS.NEW_MESSAGE, {
-              conversation_uuid: uuid,
-              message: lastAdded
-            })
-          }, 100)
-        }
+        incrementMessageVersion()
+        markConversationAsRead(uuid)
+        return true
       } catch (error) {
+        if (error.code === 'ERR_CANCELED') return false
         emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {
           variant: 'destructive',
           description: handleHTTPError(error).message
         })
+        return false
       }
     }
 
     if (!fetchNextPage && messages.data.getAllPagesMessages(uuid).length > 0) {
       markConversationAsRead(uuid)
-      return
+      return true
     }
 
     const guard = fetchNextPage ? null : delayedLoading(messages, 'loading')
@@ -533,11 +546,14 @@ export const useConversationStore = defineStore('conversation', () => {
       markConversationAsRead(uuid)
       messages.data.addMessages(uuid, result.results || [], result.page, result.total_pages)
       incrementMessageVersion()
+      return true
     } catch (error) {
+      if (error.code === 'ERR_CANCELED') return false
       emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {
         variant: 'destructive',
         description: handleHTTPError(error).message
       })
+      return false
     } finally {
       if (guard) guard.release()
       messages.fetching = false
@@ -553,7 +569,11 @@ export const useConversationStore = defineStore('conversation', () => {
       const response = await api.getConversationMessage(conversationUUID, messageUUID)
       if (response?.data?.data) {
         const newMsg = response.data.data
-        messages.data.addMessage(conversationUUID, newMsg)
+        if (messages.data.hasMessage(conversationUUID, newMsg.uuid)) {
+          messages.data.updateMessage(conversationUUID, newMsg.uuid, newMsg)
+        } else {
+          messages.data.addMessage(conversationUUID, newMsg)
+        }
         incrementMessageVersion()
         return newMsg
       }
@@ -599,7 +619,7 @@ export const useConversationStore = defineStore('conversation', () => {
     await fetchConversationsList(false, conversations.addressID, 1)
   }
 
-  async function fetchConversationsList(showLoader = true, addressID = 0, page = 0) {
+  async function fetchConversationsList(showLoader = true, addressID = 0, page = 0, replace = false) {
     if (!addressID) return
     if (conversations.listType !== CONVERSATION_LIST_TYPE.ADDRESS || conversations.addressID !== addressID) {
       resetConversations()
@@ -625,6 +645,10 @@ export const useConversationStore = defineStore('conversation', () => {
       conversations.errorMessage = ''
       const response = await makeConversationListRequest(addressID, filters, page)
       if (isStale()) return
+      if (replace) {
+        conversations.data = []
+        conversations.page = 1
+      }
       processConversationListResponse(response)
     } catch (error) {
       if (isStale()) return
@@ -690,21 +714,59 @@ export const useConversationStore = defineStore('conversation', () => {
     trimListToCurrentPage()
   }
 
-  async function updateStatus(v) {
-    if (!conversation.data) return
-    const previous = conversation.data.status
-    conversation.data.status = v
+  async function updateStatus(v, uuid = conversation.data?.uuid) {
+    if (!uuid) return
+    const target = conversation.data?.uuid === uuid
+      ? conversation.data
+      : conversations.data.find((row) => row.uuid === uuid)
+    const previous = target?.status
+    if (target) target.status = v
     try {
-      await api.updateConversationStatus(conversation.data.uuid, { status: v })
+      await api.updateConversationStatus(uuid, { status: v })
 
       fetchSidebarCounts({ force: true })
     } catch (error) {
-      if (conversation.data) conversation.data.status = previous
+      if (target) target.status = previous
       emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {
         variant: 'destructive',
         description: handleHTTPError(error).message
       })
     }
+  }
+
+  let resyncRequest = null
+  function resyncMail() {
+    if (resyncRequest) return resyncRequest
+    for (const uuid of messages.data.cache.keys()) staleConversationUUIDs.add(uuid)
+    retryDraftSave()
+    const uuid = router.currentRoute.value.params.uuid
+    const addressID = Number(router.currentRoute.value.params.addressID)
+    const requests = [fetchSidebarCounts({ force: true })]
+    if (addressID) requests.push(fetchConversationsList(false, addressID, 1, true))
+    if (uuid) requests.push(silentRefetchConversation(uuid), fetchMessages(uuid).then((loaded) => {
+      if (loaded && !document.hidden) return updateAssigneeLastSeen(uuid)
+    }))
+    resyncRequest = Promise.allSettled(requests).finally(() => { resyncRequest = null })
+    return resyncRequest
+  }
+
+  async function markAddressAsRead(addressID) {
+    const response = await api.markAddressAsRead(addressID)
+    const markedAt = response.data.data.marked_at
+    for (const row of conversations.data) {
+      if (Number(row.address_id) === Number(addressID) &&
+          (!row.last_message_at || new Date(row.last_message_at) <= new Date(markedAt))) {
+        row.unread_message_count = 0
+      }
+    }
+    const requests = [fetchSidebarCounts({ force: true })]
+    if (Number(conversations.addressID) === Number(addressID)) {
+      requests.push(fetchConversationsList(false, Number(addressID), 1, true))
+    }
+    if (Number(conversation.data?.address_id) === Number(addressID)) {
+      requests.push(silentRefetchConversation(conversation.data.uuid))
+    }
+    await Promise.allSettled(requests)
   }
 
   async function snoozeConversation(snoozeDuration) {
@@ -854,23 +916,16 @@ export const useConversationStore = defineStore('conversation', () => {
       })
     }, 0)
 
-    // Safety net: auto-remove after 10 seconds if still pending.
-    const tempId = pendingMessage.uuid
-    setTimeout(() => {
-      if (messages.data.hasMessage(conversationUUID, tempId)) {
-        messages.data.removeMessage(conversationUUID, tempId)
-        incrementMessageVersion()
-      }
-    }, 10000)
-
     return pendingMessage.uuid
   }
 
   function replacePendingMessage(conversationUUID, tempUUID, realMessage) {
     if (messages.data.hasMessage(conversationUUID, realMessage.uuid)) {
       messages.data.removeMessage(conversationUUID, tempUUID)
-    } else {
+    } else if (messages.data.hasMessage(conversationUUID, tempUUID)) {
       messages.data.updateMessage(conversationUUID, tempUUID, realMessage)
+    } else {
+      messages.data.addMessage(conversationUUID, realMessage)
     }
     incrementMessageVersion()
   }
@@ -935,38 +990,33 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   function updateTypingStatus(typingData) {
-    const { conversation_uuid: uuid, is_typing } = typingData
-
-    if (conversation.data?.uuid === uuid) {
-      if (typingTimeout) {
-        clearTimeout(typingTimeout)
-        typingTimeout = null
-      }
-      conversation.isTyping = is_typing
-      if (is_typing) {
-        typingTimeout = setTimeout(() => {
-          conversation.isTyping = false
-          typingTimeout = null
-        }, TYPING_RECEIVE_TIMEOUT)
-      }
-    }
-
-    const prev = typingTimeoutsByUUID.get(uuid)
-    if (prev) clearTimeout(prev)
-    if (is_typing) {
-      typingByUUID[uuid] = true
-      typingTimeoutsByUUID.set(
-        uuid,
-        setTimeout(() => {
+    const { conversation_uuid: uuid, is_typing, user_id: userID, user_name: name } = typingData
+    const actor = String(userID || 'unknown')
+    const key = `${uuid}::${actor}`
+    const previous = typingTimeoutsByUUID.get(key)
+    if (previous) clearTimeout(previous)
+    const clearActor = () => {
+      if (typingAgentsByUUID[uuid]) {
+        delete typingAgentsByUUID[uuid][actor]
+        if (!Object.keys(typingAgentsByUUID[uuid]).length) {
+          delete typingAgentsByUUID[uuid]
           delete typingByUUID[uuid]
-          typingTimeoutsByUUID.delete(uuid)
-        }, TYPING_RECEIVE_TIMEOUT)
-      )
-    } else {
-      delete typingByUUID[uuid]
-      typingTimeoutsByUUID.delete(uuid)
+        }
+      }
+      typingTimeoutsByUUID.delete(key)
+      if (conversation.data?.uuid === uuid) resetTypingState()
     }
+    if (is_typing) {
+      if (!typingAgentsByUUID[uuid]) typingAgentsByUUID[uuid] = {}
+      typingAgentsByUUID[uuid][actor] = name || ''
+      typingByUUID[uuid] = true
+      typingTimeoutsByUUID.set(key, setTimeout(clearActor, TYPING_RECEIVE_TIMEOUT))
+      if (conversation.data?.uuid === uuid) resetTypingState()
+    } else clearActor()
   }
+
+  const typingNames = (uuid) => Object.values(typingAgentsByUUID[uuid] || {}).filter(Boolean).join(', ')
+  onScopeDispose(() => { for (const timer of typingTimeoutsByUUID.values()) clearTimeout(timer) })
 
   function sendTyping(isTyping, otherAttributes = {}) {
     if (conversation.data?.uuid) {
@@ -987,6 +1037,8 @@ export const useConversationStore = defineStore('conversation', () => {
           newDrafts.set(draftMapKey(draft.conversation_uuid, draft.type), draft)
         }
       }
+      // Do not overwrite edits made while the initial fetch was in flight.
+      for (const [key, draft] of drafts.value) newDrafts.set(key, draft)
       drafts.value = newDrafts
     } catch (e) {
       emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {
@@ -1060,6 +1112,13 @@ export const useConversationStore = defineStore('conversation', () => {
   )
 
   return {
+    isViewingConversation,
+    typingNames,
+    resyncMail,
+    markAddressAsRead,
+    draftSaveStates,
+    syncDraft,
+    retryDraftSave,
     conversations,
     conversation,
     messages,

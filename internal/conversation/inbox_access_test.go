@@ -75,10 +75,12 @@ func TestAddressAccessAcrossMailSurfaces(t *testing.T) {
 	db.MustExec(`
 		INSERT INTO conversation_messages(conversation_id,sender_id,sender_type,type,status,text_content) VALUES
 			($1,$2,'contact','incoming','received','billing private mailbox example'),
-			($3,$2,'contact','incoming','received','support private mailbox example');
+			($3,$2,'contact','incoming','received','support private mailbox example')
+	`, billingConversation, contact, supportConversation)
+	db.MustExec(`
 		INSERT INTO conversation_drafts(conversation_id,user_id,type,content) VALUES
-			($1,$4,'reply','Billing draft'), ($3,$4,'reply','Support draft');
-	`, billingConversation, contact, supportConversation, viewer)
+			($1,$3,'reply','Billing draft'), ($2,$3,'reply','Support draft')
+	`, billingConversation, supportConversation, viewer)
 
 	manager := newTestManager()
 	manager.db, manager.lo, manager.i18n = db, &lo, i18n

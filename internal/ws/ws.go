@@ -2,6 +2,7 @@
 package ws
 
 import (
+	"encoding/json"
 	"slices"
 	"sync"
 	"time"
@@ -250,7 +251,14 @@ func (h *Hub) BroadcastMessage(msg models.BroadcastMessage) {
 }
 
 func (h *Hub) BroadcastTypingToConversation(conversationUUID string, typingMsg models.TypingMessage) {
-	if h.conversationStore != nil && !typingMsg.IsPrivateMessage {
+	data, err := json.Marshal(models.Message{Type: models.MessageTypeTyping, Data: typingMsg})
+	if err != nil {
+		return
+	}
+	for _, client := range h.AuthorizedListSubscribers(conversationUUID) {
+		if client.ID != typingMsg.UserID {
+			client.SendMessage(data, websocket.TextMessage)
+		}
 	}
 }
 

@@ -453,7 +453,7 @@ func validateAgentRequest(app *App, req *agentReq) error {
 		return envelope.NewError(envelope.InputError, app.i18n.T("validation.invalidEmail"), nil)
 	}
 
-	if req.Roles == nil {
+	if len(req.Roles) == 0 {
 		return envelope.NewError(envelope.InputError, app.i18n.Ts("globals.messages.empty", "name", "`role`"), nil)
 	}
 

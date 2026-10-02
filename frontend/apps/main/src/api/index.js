@@ -179,6 +179,7 @@ const sendMessage = (uuid, data) =>
     }
   })
 const getConversation = (uuid) => http.get(`/api/v1/conversations/${uuid}`, { abortOnRoute: true })
+const markAddressAsRead = (id) => http.post(`/api/v1/addresses/${id}/mark-read`)
 const getConversationTranscript = (uuid) =>
   http.get(`/api/v1/conversations/${uuid}/transcript`, { responseType: 'blob' })
 
@@ -273,6 +274,7 @@ const initiateOAuthFlow = (provider, data) =>
   })
 
 export default {
+  markAddressAsRead,
   login,
   deleteUser,
   importAgents,

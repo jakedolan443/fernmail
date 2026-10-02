@@ -241,6 +241,8 @@ type NewConversationsStats struct {
 
 // Message represents a message in a conversation
 type Message struct {
+	UploadUserID      int                    `db:"-" json:"-"`
+	ReplyToSourceID   string                 `db:"reply_to_source_id" json:"-"`
 	Total             int                    `db:"total" json:"-"`
 	ID                int                    `db:"id" json:"id"`
 	CreatedAt         time.Time              `db:"created_at" json:"created_at"`
@@ -380,6 +382,10 @@ type IncomingContact struct {
 }
 
 type IncomingMessage struct {
+	AddressID   int
+	MailboxKey  string
+	UIDValidity uint32
+	UID         uint32
 	// Channel context
 	Channel string
 	InboxID int

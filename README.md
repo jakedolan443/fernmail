@@ -6,7 +6,7 @@ The workspace is deliberately reply-only: agents cannot start an outbound conver
 
 Email runs over IMAP and SMTP, including Google/Microsoft OAuth. This is a conversation-based shared mailbox, not a full bidirectional IMAP folder client.
 
-Unread mail has a green edge and contributes to the browser tab count. Optional browser notifications show the sender and a message preview while Fernmail is open.
+Unread mail has a green edge and contributes to the browser tab count. Each address has a “Mark all as read” action for your own read state. Optional browser notifications show the sender and a message preview while Fernmail is open.
 
 The new binary, module, and container image are named Fernmail. Existing `LIBREDESK_` configuration variables, database identifiers, and container names remain compatible with earlier installations. Custom site names and favicons are preserved when upgrading.
 

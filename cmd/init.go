@@ -52,13 +52,11 @@ import (
 	"github.com/jakedolan443/fernmail/internal/ws"
 	"github.com/jmoiron/sqlx"
 
-	kjson "github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/parsers/toml"
 	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/posflag"
-	"github.com/knadh/koanf/providers/rawbytes"
 	"github.com/knadh/koanf/v2"
 	"github.com/knadh/stuffbin"
 	_ "github.com/lib/pq"
@@ -591,13 +589,10 @@ func initAccountMailer() *accountmail.Service {
 func initEmailInbox(inboxRecord imodels.Inbox, msgStore inbox.MessageStore, usrStore inbox.UserStore, mgr *inbox.Manager) (inbox.Inbox, error) {
 	var config imodels.Config
 
-	// Load JSON data into Koanf.
-	if err := ko.Load(rawbytes.Provider([]byte(inboxRecord.Config)), kjson.Parser()); err != nil {
-		return nil, fmt.Errorf("loading config: %w", err)
-	}
-
-	if err := ko.UnmarshalWithConf("", &config, koanf.UnmarshalConf{Tag: "json"}); err != nil {
-		return nil, fmt.Errorf("unmarshalling `%s` %s config: %w", inboxRecord.Channel, inboxRecord.Name, err)
+	// Inbox configuration must never mutate or inherit another inbox's global
+	// application configuration (OAuth, aliases and reply routing are private).
+	if err := json.Unmarshal(inboxRecord.Config, &config); err != nil {
+		return nil, fmt.Errorf("decoding email inbox %s: %w", inboxRecord.Name, err)
 	}
 
 	if len(config.SMTP) == 0 {

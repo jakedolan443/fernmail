@@ -35,9 +35,8 @@ func normalizeRecipient(value string) string {
 func configuredAliases(aliases []imodels.EmailAlias) map[string]imodels.EmailAlias {
 	result := make(map[string]imodels.EmailAlias, len(aliases))
 	for _, alias := range aliases {
-		if !alias.Enabled {
-			continue
-		}
+		// Retirement disables sending, not delivery ownership: mail still
+		// addressed here must retain this address's access boundary.
 		address := normalizeRecipient(alias.Address)
 		if address != "" {
 			alias.Address = address
@@ -77,7 +76,7 @@ func resolveRecipientAlias(aliases []imodels.EmailAlias, headers map[string]stri
 	}
 
 	for _, alias := range aliases {
-		if alias.Enabled && alias.Default {
+		if alias.Default {
 			return normalizeRecipient(alias.Address)
 		}
 	}

@@ -90,6 +90,7 @@ type Manager struct {
 	incomingMessageQueue       chan models.IncomingMessage
 	outgoingMessageQueue       chan models.Message
 	outgoingProcessingMessages sync.Map
+	stopCh                     chan struct{}
 	closed                     bool
 	closedMu                   sync.RWMutex
 	wg                         sync.WaitGroup
@@ -113,10 +114,10 @@ type mediaStore interface {
 	GetURL(uuid, contentType, fileName string) string
 	GetSignedURL(name string) string
 	GetThumbnailURL(uuid string) string
-	LinkMessageMediaTx(tx *sqlx.Tx, messageID int, media []mmodels.Media, inlineUUIDs []string) error
+	LinkMessageMediaTx(tx *sqlx.Tx, messageID int, media []mmodels.Media, inlineUUIDs []string, uploadUserID int) error
 	GetByModel(id int, model string) ([]mmodels.Media, error)
 	GetByContentIDs(contentIDs []string, conversationUUID string) ([]mmodels.Media, error)
-	GetDraftInlineMedia(uuid string, conversationID int) (mmodels.Media, error)
+	GetDraftInlineMedia(uuid string, conversationID, userID int) (mmodels.Media, error)
 	ContentIDExists(contentID, conversationUUID string) (bool, string, error)
 	Upload(fileName, contentType string, content io.ReadSeeker) (string, string, error)
 	UploadAndInsert(fileName, contentType, contentID string, modelType null.String, modelID null.Int, content io.ReadSeeker, fileSize int, disposition null.String, meta []byte, private bool) (mmodels.Media, error)
@@ -188,6 +189,7 @@ func New(
 		template:                   template,
 		db:                         opts.DB,
 		lo:                         opts.Lo,
+		stopCh:                     make(chan struct{}),
 		incomingMessageQueue:       make(chan models.IncomingMessage, opts.IncomingMessageQueueSize),
 		outgoingMessageQueue:       make(chan models.Message, opts.OutgoingMessageQueueSize),
 		outgoingProcessingMessages: sync.Map{},
@@ -286,11 +288,8 @@ func (c *Manager) CreateConversation(contactID, inboxID, addressID int, lastMess
 		c.lo.Error("error inserting new conversation into the DB", "error", err)
 		return 0, "", err
 	}
-	if item, err := c.GetConversationListItem(uuid); err == nil {
-		c.BroadcastNewConversation(&item)
-	} else {
-		c.lo.Error("error fetching conversation list item for broadcast", "uuid", uuid, "error", err)
-	}
+	// The first message owns publication: failed/duplicate ingestion may still
+	// remove this provisional conversation before any mail has committed.
 	return id, uuid, nil
 }
 
@@ -441,11 +440,12 @@ func (c *Manager) GetConversations(viewingUserID, userID int, teamIDs []int, lis
 	tx, err := c.db.BeginTxx(context.Background(), &sql.TxOptions{
 		ReadOnly: true,
 	})
-	defer tx.Rollback()
 	if err != nil {
 		c.lo.Error("error preparing get conversations query", "error", err)
 		return conversations, envelope.NewError(envelope.GeneralError, c.i18n.T("globals.messages.somethingWentWrong"), nil)
 	}
+
+	defer tx.Rollback()
 
 	if err := tx.Select(&conversations, query, qArgs...); err != nil {
 		c.lo.Error("error fetching conversations", "error", err)
@@ -616,17 +616,25 @@ func (m *Manager) GetMessageSourceIDs(conversationID, limit int) ([]string, erro
 // BuildEmailThreadingHeaders builds References and In-Reply-To headers for an outgoing email,
 // excluding the message's own source ID.
 func (m *Manager) BuildEmailThreadingHeaders(conversationID int, selfSourceID string) ([]string, string) {
-	references, err := m.GetMessageSourceIDs(conversationID, 20)
-	if err != nil {
+	var current struct {
+		ID     int    `db:"id"`
+		Parent string `db:"reply_to_source_id"`
+	}
+	if err := m.db.Get(&current, `SELECT id,reply_to_source_id FROM conversation_messages WHERE conversation_id=$1 AND source_id=$2 ORDER BY id DESC LIMIT 1`, conversationID, selfSourceID); err != nil {
+		return nil, ""
+	}
+	var references []string
+	// A reply's parent is fixed at queue time. Never point at a future pending
+	// or failed reply simply because another agent typed at the same time.
+	if err := m.db.Select(&references, `SELECT source_id FROM conversation_messages WHERE conversation_id=$1 AND id<$2 AND NOT private AND type IN ('incoming','outgoing') AND status IN ('received','sent') AND source_id>'' AND ($3='' OR id<=(SELECT id FROM conversation_messages WHERE conversation_id=$1 AND source_id=$3 ORDER BY id DESC LIMIT 1)) ORDER BY id DESC LIMIT 20`, conversationID, current.ID, current.Parent); err != nil {
 		return nil, ""
 	}
 	slices.Reverse(references)
-	references = stringutil.RemoveItemByValue(references, selfSourceID)
-	var inReplyTo string
-	if len(references) > 0 {
-		inReplyTo = references[len(references)-1]
+	parent := current.Parent
+	if parent == "" && len(references) > 0 {
+		parent = references[len(references)-1]
 	}
-	return references, inReplyTo
+	return references, parent
 }
 
 // DeleteConversation deletes a conversation.

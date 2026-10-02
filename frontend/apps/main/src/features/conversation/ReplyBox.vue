@@ -20,7 +20,11 @@
     </AlertDialogContent>
   </AlertDialog>
 
-  <div class="h-full min-h-0 overflow-hidden text-foreground bg-background">
+  <div class="flex h-full min-h-0 flex-col overflow-hidden text-foreground bg-background">
+    <div v-if="newerReply && !isEditorFullscreen" class="flex shrink-0 items-center gap-2 border-b border-warning/40 bg-warning/10 px-3 py-2 text-sm" role="status">
+      <span class="flex-1">{{ t('replyBox.newerReply') }}</span>
+      <Button type="button" size="sm" variant="ghost" @click="acknowledgeReply">{{ t('replyBox.reviewedReply') }}</Button>
+    </div>
     <!-- Fullscreen editor -->
     <Dialog :open="isEditorFullscreen" @update:open="isEditorFullscreen = false">
       <DialogContent
@@ -38,8 +42,12 @@
           v-if="isEditorFullscreen"
           ref="fullscreenContentRef"
           :isFullscreen="true"
+          :newerReply="newerReply"
+          @reviewedReply="acknowledgeReply"
           :isSending="isSending"
           :isDraftLoading="isDraftLoading"
+          :draftSaveState="draftSaveState"
+          @retryDraftSave="retryDraftSave"
           :uploadingFiles="uploadingFiles"
           :uploadedFiles="mediaFiles"
           v-model:htmlContent="htmlContent"
@@ -65,6 +73,10 @@
     </Dialog>
 
     <div v-if="isCramped && !isEditorFullscreen" class="p-2">
+      <div v-if="draftSaveState === 'error'" class="mb-2 text-xs text-destructive" role="status">
+        {{ t('replyBox.draftSaveFailed') }}
+        <Button type="button" size="sm" variant="link" @click="retryDraftSave">{{ t('replyBox.retryDraftSave') }}</Button>
+      </div>
       <Button
         type="button"
         variant="outline"
@@ -93,7 +105,7 @@
 
     <!-- Main Editor non-fullscreen -->
     <div
-      class="bg-background text-card-foreground box m-2 h-[calc(100%-1rem)] min-h-0 px-2 pt-2 flex flex-col relative overflow-hidden"
+      class="bg-background text-card-foreground box m-2 flex-1 min-h-0 px-2 pt-2 flex flex-col relative overflow-hidden"
       :class="{ '!bg-private': messageType === 'private_note' }"
       v-if="!isCramped && !isEditorFullscreen"
     >
@@ -102,6 +114,8 @@
         :isFullscreen="false"
         :isSending="isSending"
         :isDraftLoading="isDraftLoading"
+        :draftSaveState="draftSaveState"
+        @retryDraftSave="retryDraftSave"
         :uploadingFiles="uploadingFiles"
         :uploadedFiles="mediaFiles"
         v-model:htmlContent="htmlContent"
@@ -132,6 +146,7 @@ import { handleHTTPError } from '@shared-ui/utils/http.js'
 import { EMITTER_EVENTS } from '@main/constants/emitterEvents.js'
 import { useUserStore } from '@main/stores/user'
 import { useDraftManager } from '@main/composables/useDraftManager'
+import { useReplyAwareness } from '@main/composables/useReplyAwareness'
 import api from '@main/api'
 import { useI18n } from 'vue-i18n'
 import { useConversationStore } from '@main/stores/conversation'
@@ -184,7 +199,6 @@ const {
   handleFileDelete,
   uploadFiles,
   mediaFiles,
-  clearMediaFiles,
   setMediaFiles
 } = useFileUpload({
   linkedModel: 'messages'
@@ -210,22 +224,40 @@ watch(
   { immediate: true }
 )
 
+const recipientDefaults = computed(() => ({
+  uuid: currentConversationUUID.value,
+  ready: conversationStore.messages.data.hasConversation(currentConversationUUID.value),
+  recipients: {
+    to: conversationStore.currentTo.join(', '),
+    cc: conversationStore.currentCC.join(', '),
+    bcc: conversationStore.currentBCC.join(', ')
+  }
+}))
+
 // Setup draft management composable, keyed per conversation and message type.
 const {
   htmlContent,
   textContent,
   isLoading: isDraftLoading,
-  clearDraft,
-  loadedAttachments
-} = useDraftManager(currentConversationUUID, messageType, mediaFiles)
+  captureDraft,
+  completeSend,
+  loadedAttachments,
+  recipients,
+  saveState: draftSaveState,
+  retrySave: retryDraftSave
+} = useDraftManager(currentConversationUUID, messageType, mediaFiles, recipientDefaults)
 
 // Rest of existing state
 const isEditorFullscreen = ref(false)
 const isSending = ref(false)
 
-const to = ref('')
-const cc = ref('')
-const bcc = ref('')
+const recipientModel = (field) => computed({
+  get: () => recipients.value[field],
+  set: (value) => { recipients.value[field] = value }
+})
+const to = recipientModel('to')
+const cc = recipientModel('cc')
+const bcc = recipientModel('bcc')
 const showBcc = ref(false)
 const emailErrors = ref([])
 const replyBoxContentRef = ref(null)
@@ -273,7 +305,20 @@ const draftPreview = computed(() => textContent.value.trim())
 
 const attachmentCount = computed(() => mediaFiles.value.length + uploadingFiles.value.length)
 
+const { newerReply, acknowledgeReply } = useReplyAwareness({
+  uuid: currentConversationUUID,
+  messageType,
+  hasDraft: computed(() => hasTextContent.value || hasInlineImage(htmlContent.value) || mediaFiles.value.length > 0),
+  messages: computed(() => conversationStore.conversationMessages),
+  ready: computed(() => {
+    void conversationStore.messages.version
+    return conversationStore.messages.data.hasConversation(currentConversationUUID.value)
+  }),
+  userID: computed(() => userStore.userID)
+})
+
 const processSend = async (skipContactEmailCheck = false, statusToSet = null) => {
+  if (isSending.value || isDraftLoading.value || !conversationStore.current.uuid) return
   let hasMessageSendingErrored = false
   isEditorFullscreen.value = false
 
@@ -300,11 +345,12 @@ const processSend = async (skipContactEmailCheck = false, statusToSet = null) =>
       const contactEmail = conversationStore.current.correspondent?.email?.toLowerCase()
       if (contactEmail) {
         const allRecipients = [to.value, cc.value, bcc.value].join(',').toLowerCase()
+        const intendedRecipients = [contactEmail, ...conversationStore.currentTo.map(email => email.toLowerCase())]
         if (
           !allRecipients
             .split(',')
             .map((e) => e.trim())
-            .includes(contactEmail)
+            .some((email) => intendedRecipients.includes(email))
         ) {
           deferredStatus.value = statusToSet
           showContactEmailWarning.value = true
@@ -314,9 +360,11 @@ const processSend = async (skipContactEmailCheck = false, statusToSet = null) =>
     }
   }
   let tempUUID = null
+  let draftSnapshot = null
 
   // Add pending message to cache for instant display.
   if (hasContent) {
+    draftSnapshot = captureDraft()
     const savedContent = htmlContent.value
     const author = {
       id: userStore.userID,
@@ -361,9 +409,7 @@ const processSend = async (skipContactEmailCheck = false, statusToSet = null) =>
       meta
     )
 
-    // Clear editor immediately.
-    htmlContent.value = ''
-
+    // Keep the draft until the server acknowledges durable storage.
     try {
       isSending.value = true
       const response = await api.sendMessage(convUUID, {
@@ -378,15 +424,14 @@ const processSend = async (skipContactEmailCheck = false, statusToSet = null) =>
         echo_id: isPrivate ? '' : tempUUID
       })
 
-      // Private notes are sent immediately so replace immediately.
-      if (isPrivate && response?.data?.data) {
+      // The HTTP acknowledgement contains the durable message; WS may be offline.
+      if (response?.data?.data?.uuid) {
         conversationStore.replacePendingMessage(convUUID, tempUUID, response.data.data)
       }
     } catch (error) {
       hasMessageSendingErrored = true
-      // Remove pending message and restore editor content.
+      // The original draft remains intact, even after navigating to another thread.
       conversationStore.removePendingMessage(convUUID, tempUUID)
-      htmlContent.value = savedContent
       emitter.emit(EMITTER_EVENTS.SHOW_TOAST, {
         variant: 'destructive',
         description: handleHTTPError(error).message
@@ -396,11 +441,11 @@ const processSend = async (skipContactEmailCheck = false, statusToSet = null) =>
 
   // Clear state on success.
   if (!hasMessageSendingErrored) {
-    clearDraft(convUUID, isPrivate ? 'private_note' : 'reply')
-    clearMediaFiles()
-    emailErrors.value = []
-    mentions.value = []
-    if (statusToSet) conversationStore.updateStatus(statusToSet)
+    if (draftSnapshot && completeSend(draftSnapshot)) {
+      emailErrors.value = []
+      mentions.value = []
+    }
+    if (statusToSet) await conversationStore.updateStatus(statusToSet, convUUID)
   }
   isSending.value = false
 }
@@ -418,35 +463,7 @@ watch(
   { deep: true }
 )
 
-// Initialize to, cc, and bcc fields with the current conversation's values.
-watch(
-  () => conversationStore.currentCC,
-  (newVal) => {
-    cc.value = newVal?.join(', ') || ''
-  },
-  { deep: true, immediate: true }
-)
-
-watch(
-  () => conversationStore.currentTo,
-  (newVal) => {
-    to.value = newVal?.join(', ') || ''
-  },
-  { immediate: true }
-)
-
-watch(
-  () => conversationStore.currentBCC,
-  (newVal) => {
-    const newBcc = newVal?.join(', ') || ''
-    bcc.value = newBcc
-    // Only show BCC field if it has content
-    if (newBcc.length > 0) {
-      showBcc.value = true
-    }
-  },
-  { deep: true, immediate: true }
-)
+watch(bcc, (value) => { showBcc.value = Boolean(value) })
 
 // Media files are restored per draft by the draft manager; resetting here would race ahead of the save and drop them.
 watch(

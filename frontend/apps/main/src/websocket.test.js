@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { conversations, notifyNewMessage } = vi.hoisted(() => ({
   conversations: {
     conversation: { data: null },
+    conversations: { data: [] },
     sidebarCounts: { unread: 0, addresses: {} },
     handleConvPush: vi.fn(),
     mergeConversationUpdate: vi.fn(),
@@ -11,6 +12,8 @@ const { conversations, notifyNewMessage } = vi.hoisted(() => ({
     incrementAddressUnread: vi.fn(),
     isConversationInList: vi.fn(() => true),
     updateConversationMessage: vi.fn(),
+    resyncMail: vi.fn(),
+    updateTypingStatus: vi.fn(),
     refreshSidebarCounts: vi.fn()
   },
   notifyNewMessage: vi.fn()
@@ -23,7 +26,8 @@ vi.mock('./stores/browserNotifications', () => ({
   useBrowserNotificationsStore: () => ({ notifyNewMessage })
 }))
 vi.mock('./stores/users', () => ({ useUsersStore: () => ({}) }))
-vi.mock('./stores/connection', () => ({ useConnectionStore: () => ({}) }))
+vi.mock('./stores/user', () => ({ useUserStore: () => ({ userID: 1 }) }))
+vi.mock('./stores/connection', () => ({ useConnectionStore: () => ({ setConnecting: vi.fn(), setConnectionFailed: vi.fn() }) }))
 vi.mock('./composables/useEmitter', () => ({ useEmitter: () => ({}) }))
 import { WebSocketClient } from './websocket'
 
@@ -38,6 +42,7 @@ let client
 beforeEach(() => {
   vi.clearAllMocks()
   conversations.conversation.data = null
+  conversations.isViewingConversation = (uuid) => conversations.conversation.data?.uuid === uuid
   conversations.sidebarCounts.unread = 0
   Object.defineProperty(document, 'hidden', { configurable: true, value: false })
   client = new WebSocketClient()
@@ -47,6 +52,22 @@ const receive = (type, data) =>
   client.handleMessage({ target: client.socket, data: JSON.stringify({ type, data }) })
 
 describe('live mail delivery', () => {
+  it('resynchronizes authoritative state when its socket reconnects or another tab marks an address read', () => {
+    client.setupPing = vi.fn()
+    client.subscribeListReplace = vi.fn()
+    client.subscribeToConversation = vi.fn()
+    client.reconnectAttempts = 1
+    client.handleOpen({ target: client.socket })
+    expect(conversations.resyncMail).toHaveBeenCalledTimes(1)
+    receive('address_read', { address_id: 6, marked_at: '2026-10-01T10:00:00Z' })
+    expect(conversations.resyncMail).toHaveBeenCalledTimes(2)
+  })
+  it('ignores its own typing while showing another agent typing', () => {
+    receive('typing', { user_id: 1, conversation_uuid: 'thread-1', is_typing: true })
+    expect(conversations.updateTypingStatus).not.toHaveBeenCalled()
+    receive('typing', { user_id: 2, conversation_uuid: 'thread-1', is_typing: true })
+    expect(conversations.updateTypingStatus).toHaveBeenCalledTimes(1)
+  })
   it('updates the inbox and sends each new-message event to browser notifications', () => {
     receive('new_message', mail)
     expect(conversations.incrementUnread).toHaveBeenCalledWith('thread-1')

@@ -83,7 +83,7 @@
                 :class="isUnread ? 'text-foreground font-medium' : 'text-muted-foreground'"
               >
                 <template v-if="isTyping">
-                  <span class="italic text-foreground">{{ $t('globals.terms.typing') }}</span>
+                  <span class="italic text-foreground">{{ conversationStore.typingNames(conversation.uuid) ? $t('conversation.agentsTyping', { names: conversationStore.typingNames(conversation.uuid) }) : $t('globals.terms.typing') }}</span>
                 </template>
                 <template v-else-if="hasDraftForConversation && !isCurrent">
                   <span class="font-medium text-foreground">{{ $t('globals.terms.draft') }}:</span>

@@ -59,6 +59,7 @@ func initHandlers(g *fastglue.Fastglue, hub *ws.Hub) {
 	// saved views, or agent-created outbound conversation endpoint is exposed.
 	g.GET("/api/v1/addresses", perm(handleGetAddresses, "conversations:read"))
 	g.GET("/api/v1/addresses/{id}/conversations", perm(handleGetAddressConversations, "conversations:read"))
+	g.POST("/api/v1/addresses/{id}/mark-read", perm(handleMarkAddressRead, "conversations:read"))
 	g.GET("/api/v1/conversations/sidebar-counts", perm(handleGetSidebarCounts, "conversations:read"))
 	g.GET("/api/v1/conversations/{uuid}", perm(handleGetConversation, "conversations:read"))
 	g.GET("/api/v1/conversations/{uuid}/participants", perm(handleGetConversationParticipants, "conversations:read"))

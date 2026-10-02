@@ -222,6 +222,9 @@ func (e *Email) Send(m models.OutboundMessage) error {
 		serverCount = len(e.smtpPools)
 		server      *smtppool.Pool
 	)
+	if serverCount == 0 {
+		return fmt.Errorf("no SMTP server configured for inbox %d", e.id)
+	}
 	if serverCount > 1 {
 		server = e.smtpPools[rand.Intn(serverCount)]
 	} else {

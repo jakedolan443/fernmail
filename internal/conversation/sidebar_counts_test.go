@@ -51,14 +51,12 @@ func TestUnreadAddressCountsOnlyIncludeAccessibleAddresses(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.MustExec(`
-		INSERT INTO conversation_messages(conversation_id,sender_id,sender_type,type,status,text_content) VALUES
-			($1,$2,'contact','incoming','received','first director message'),
-			($1,$2,'contact','incoming','received','second director message'),
-			($1,$2,'contact','incoming','received','third director message');
 		INSERT INTO conversation_messages(conversation_id,sender_id,sender_type,type,status,text_content,meta) VALUES
-			($1,$2,'contact','incoming','received','continuity', '{"continuity_email":true}');
-		INSERT INTO conversation_messages(conversation_id,sender_id,sender_type,type,status,text_content) VALUES
-			($3,$2,'contact','incoming','received','hidden support message');
+			($1,$2,'contact','incoming','received','first director message','{}'),
+			($1,$2,'contact','incoming','received','second director message','{}'),
+			($1,$2,'contact','incoming','received','third director message','{}'),
+			($1,$2,'contact','incoming','received','continuity', '{"continuity_email":true}'),
+			($3,$2,'contact','incoming','received','hidden support message','{}');
 	`, directorConversation, sender, supportConversation)
 
 	m := &Manager{db: db}

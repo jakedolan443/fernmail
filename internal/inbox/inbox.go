@@ -36,7 +36,8 @@ var (
 	efs embed.FS
 
 	// ErrInboxNotFound is returned when an inbox is not found.
-	ErrInboxNotFound = errors.New("inbox not found")
+	ErrInboxNotFound     = errors.New("inbox not found")
+	ErrIncomingQueueFull = errors.New("durable incoming queue is full")
 )
 
 type initFn func(imodels.Inbox, MessageStore, UserStore) (Inbox, error)
@@ -77,7 +78,8 @@ type IncomingMessageSizeSetter interface {
 
 // MessageStore defines methods for storing and processing messages.
 type MessageStore interface {
-	MessageExists(string) (bool, error)
+	IMAPState(int, string, uint32) (uint32, []uint32, error)
+	RecordIMAPResult(int, string, uint32, uint32, error) error
 	EnqueueIncoming(models.IncomingMessage) error
 }
 

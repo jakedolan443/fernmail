@@ -54,6 +54,26 @@ type fromNameInbox struct{ Name string }
 // Run starts a pool of worker goroutines to handle message dispatching via inbox's channel and processes incoming messages. It scans for
 // pending outgoing messages at the specified read interval and pushes them to the outgoing queue to be sent.
 func (m *Manager) Run(ctx context.Context, incomingQWorkers, outgoingQWorkers, scanInterval time.Duration) {
+	m.closedMu.Lock()
+	if m.closed {
+		m.closedMu.Unlock()
+		return
+	}
+	if m.stopCh == nil {
+		m.stopCh = make(chan struct{})
+	}
+	m.wg.Add(1)
+	defer m.wg.Done()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		select {
+		case <-m.stopCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
 	dbScanner := time.NewTicker(scanInterval)
 	defer dbScanner.Stop()
 
@@ -71,6 +91,10 @@ func (m *Manager) Run(ctx context.Context, incomingQWorkers, outgoingQWorkers, s
 			m.IncomingMessageWorker(ctx)
 		}()
 	}
+
+	m.wg.Add(1)
+	go func() { defer m.wg.Done(); m.runMailMaintenance(ctx) }()
+	m.closedMu.Unlock()
 
 	// Scan pending outgoing messages and send them.
 	for {
@@ -95,7 +119,11 @@ func (m *Manager) Run(ctx context.Context, incomingQWorkers, outgoingQWorkers, s
 				m.outgoingProcessingMessages.Store(message.ID, message.ID)
 
 				// Push the message to the outgoing message queue.
-				m.outgoingMessageQueue <- message
+				select {
+				case m.outgoingMessageQueue <- message:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}
@@ -105,26 +133,31 @@ func (m *Manager) Run(ctx context.Context, incomingQWorkers, outgoingQWorkers, s
 // and waits for all worker goroutines to finish processing.
 func (m *Manager) Close() {
 	m.closedMu.Lock()
-	defer m.closedMu.Unlock()
-	m.closed = true
-	close(m.outgoingMessageQueue)
-	close(m.incomingMessageQueue)
+	if !m.closed {
+		m.closed = true
+		if m.stopCh != nil {
+			close(m.stopCh)
+		}
+	}
+	m.closedMu.Unlock()
+	// Producers and consumers share cancellation. Never close a queue beneath a
+	// producer; queued delivery remains pending in Postgres for the next run.
 	m.wg.Wait()
 }
 
 // IncomingMessageWorker processes incoming messages from the incoming message queue.
 func (m *Manager) IncomingMessageWorker(ctx context.Context) {
 	for {
+		if ctx.Err() != nil {
+			return
+		}
+		if m.processDurableIncoming(ctx) {
+			continue
+		}
 		select {
 		case <-ctx.Done():
 			return
-		case msg, ok := <-m.incomingMessageQueue:
-			if !ok {
-				return
-			}
-			if _, err := m.processIncomingMessage(ctx, msg); err != nil {
-				m.lo.Error("error processing incoming msg", "error", err)
-			}
+		case <-time.After(time.Second):
 		}
 	}
 }
@@ -147,17 +180,32 @@ func (m *Manager) MessageSenderWorker(ctx context.Context) {
 // sendOutgoingMessage sends an outgoing message.
 func (m *Manager) sendOutgoingMessage(message models.Message) {
 	defer m.outgoingProcessingMessages.Delete(message.ID)
+	token, err := m.claimDelivery(message.ID)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			m.lo.Error("claiming outgoing message", "error", err)
+		}
+		return
+	}
+	leaseCtx, cancelLease := context.WithCancel(context.Background())
+	defer cancelLease()
+	go m.heartbeatDelivery(leaseCtx, token)
 
 	// Helper function to handle errors
 	handleError := func(err error, errorMsg string) bool {
 		if err != nil {
 			m.lo.Error(errorMsg, "error", err, "message_id", message.ID)
-			m.UpdateMessageStatus(message.UUID, models.MessageStatusFailed)
+			if saveErr := m.finishDelivery(message, token, "failed", err); saveErr != nil {
+				m.lo.Error("recording failed delivery", "error", saveErr)
+			}
 			return true
 		}
 		return false
 	}
 
+	if err := m.ensureDeliveryAllowed(message.ID); handleError(err, "outgoing address or sender is no longer authorized") {
+		return
+	}
 	// Get inbox
 	inb, err := m.inboxStore.Get(message.InboxID)
 	if handleError(err, "error fetching inbox") {
@@ -189,12 +237,17 @@ func (m *Manager) sendOutgoingMessage(message models.Message) {
 	// Send message
 	err = inb.Send(outbound)
 	if err != nil {
-		handleError(err, "error sending message")
+		if saveErr := m.finishDelivery(message, token, "unknown", err); saveErr != nil {
+			m.lo.Error("recording uncertain delivery", "error", saveErr)
+		}
 		return
 	}
 
 	// Update status as sent.
-	m.UpdateMessageStatus(message.UUID, models.MessageStatusSent)
+	if err := m.finishDelivery(message, token, "sent", nil); err != nil {
+		m.lo.Error("SMTP succeeded but completion could not be saved; held for reconciliation", "error", err)
+		return
+	}
 
 	// Skip system user replies since we only update timestamps and SLA for human replies.
 	systemUser, err := m.userStore.GetSystemUser()
@@ -333,12 +386,12 @@ func (m *Manager) GetConversationMessages(conversationUUID string, page, pageSiz
 	tx, err := m.db.BeginTxx(context.Background(), &sql.TxOptions{
 		ReadOnly: true,
 	})
-	defer tx.Rollback()
 	if err != nil {
 		m.lo.Error("error preparing get messages query", "error", err)
 		return messages, pageSize, envelope.NewError(envelope.GeneralError, m.i18n.T("globals.messages.somethingWentWrong"), nil)
 	}
 
+	defer tx.Rollback()
 	if err := tx.Select(&messages, query, qArgs...); err != nil {
 		m.lo.Error("error fetching conversations", "error", err)
 		return messages, pageSize, envelope.NewError(envelope.GeneralError, m.i18n.T("globals.messages.somethingWentWrong"), nil)
@@ -423,10 +476,26 @@ func (m *Manager) UpdateMessageStatus(messageUUID string, status string) error {
 
 // MarkMessageAsPending updates message status to `Pending`, enqueuing it for sending.
 func (m *Manager) MarkMessageAsPending(uuid string) error {
-	if err := m.UpdateMessageStatus(uuid, models.MessageStatusPending); err != nil {
-		m.lo.Error("error marking message as pending", "uuid", uuid, "error", err)
-		return envelope.NewError(envelope.GeneralError, m.i18n.T("globals.messages.errorSendingMessage"), nil)
+	tx, err := m.db.Beginx()
+	if err != nil {
+		return err
 	}
+	defer tx.Rollback()
+	var id int
+	if err = tx.Get(&id, `SELECT id FROM conversation_messages WHERE uuid=$1 AND status='failed' FOR UPDATE`, uuid); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`UPDATE mail_delivery_attempts SET state='retry_authorized' WHERE message_id=$1 AND state='unknown'`, id); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`UPDATE conversation_messages SET status='pending',meta=COALESCE(meta,'{}')-'delivery_uncertain'-'delivery_error',updated_at=now() WHERE id=$1`, id); err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	conversationUUID, _ := m.getConversationUUIDFromMessageUUID(uuid)
+	m.BroadcastMessageUpdate(conversationUUID, uuid, map[string]any{"status": models.MessageStatusPending, "meta": m.deliveryMeta(uuid)})
 	return nil
 }
 
@@ -465,7 +534,7 @@ func (m *Manager) SendPrivateNote(media []mmodels.Media, senderID int, conversat
 
 // CreateContactMessage creates a contact message in a conversation.
 // sourceID is the bare RFC 5322 Message-ID of the inbound message; it is normalized and stored on the message so replies thread on it, mirroring the IMAP ingestion path. Empty leaves the column NULL.
-func (m *Manager) CreateContactMessage(media []mmodels.Media, contactID int, conversationUUID, content, contentType string, isNewConversation bool, sourceID string) (models.Message, error) {
+func (m *Manager) CreateContactMessage(media []mmodels.Media, contactID int, conversationUUID, content, contentType string, isNewConversation bool, sourceID string, uploadUserIDs ...int) (models.Message, error) {
 	sourceID = stringutil.NormalizeMessageID(sourceID)
 	message := models.Message{
 		ConversationUUID: conversationUUID,
@@ -478,6 +547,9 @@ func (m *Manager) CreateContactMessage(media []mmodels.Media, contactID int, con
 		Private:          false,
 		Media:            media,
 		SourceID:         null.NewString(sourceID, sourceID != ""),
+	}
+	if len(uploadUserIDs) > 0 {
+		message.UploadUserID = uploadUserIDs[0]
 	}
 	if err := m.InsertMessage(&message); err != nil {
 		return models.Message{}, err
@@ -550,8 +622,11 @@ func (m *Manager) QueueReply(media []mmodels.Media, inboxID, senderID, contactID
 		content = m.template.RenderString(data, content)
 	}
 
+	var parent string
+	_ = m.db.Get(&parent, `SELECT COALESCE(source_id,'') FROM conversation_messages WHERE conversation_id=(SELECT id FROM conversations WHERE uuid=$1) AND NOT private AND type IN ('incoming','outgoing') AND status IN ('received','sent') AND source_id>'' ORDER BY id DESC LIMIT 1`, conversationUUID)
 	// Insert the message into the database
 	message = models.Message{
+		ReplyToSourceID:   parent,
 		ConversationUUID:  conversationUUID,
 		SenderID:          senderID,
 		Type:              models.MessageOutgoing,
@@ -589,10 +664,22 @@ func (m *Manager) insertMessage(ctx context.Context, message *models.Message) er
 		message.ContentType = models.ContentTypeText
 	}
 
-	inlineUUIDs := extractInlineImageUUIDs(message.Content)
-
-	// Rewrite inline image URLs to cid:ldsk-<uuid>. The read API resolves them back to signed URLs.
-	message.Content = rewriteInlineImagesToCID(message.Content)
+	var inlineUUIDs []string
+	// Server-ingested MIME attachments carry explicit media IDs. Remote inbound
+	// images never claim uploads, even if their URLs contain UUID-shaped paths.
+	if message.Type != models.MessageIncoming || message.UploadUserID > 0 {
+		conversationID := message.ConversationID
+		if conversationID == 0 && message.ConversationUUID != "" {
+			if err := m.db.Get(&conversationID, `SELECT id FROM conversations WHERE uuid=$1`, message.ConversationUUID); err != nil {
+				return err
+			}
+		}
+		ownerID := message.UploadUserID
+		if message.SenderType == models.SenderTypeAgent {
+			ownerID = message.SenderID
+		}
+		message.Content, inlineUUIDs = m.normalizeInlineUploads(message.Content, conversationID, ownerID)
+	}
 
 	// Convert content to plain text for search.
 	if message.ContentType == models.ContentTypeText {
@@ -607,14 +694,27 @@ func (m *Manager) insertMessage(ctx context.Context, message *models.Message) er
 		return envelope.NewError(envelope.GeneralError, m.i18n.T("globals.messages.somethingWentWrong"), nil)
 	}
 	defer tx.Rollback()
+	// Serialize receipt creation with mailbox mark-read snapshots. The insert
+	// clock is taken after this lock, never at the start of a long transaction.
+	if err := tx.QueryRow(`SELECT id,uuid FROM conversations WHERE ($1>0 AND id=$1) OR ($1=0 AND uuid=NULLIF($2,'')::uuid) FOR NO KEY UPDATE`, message.ConversationID, message.ConversationUUID).Scan(&message.ConversationID, &message.ConversationUUID); err != nil {
+		return err
+	}
 
 	if err := tx.Stmtx(m.q.InsertMessage).Get(message, message.Type, message.Status, message.ConversationID, message.ConversationUUID, message.Content, message.TextContent, message.SenderID, message.SenderType,
-		message.Private, message.ContentType, message.SourceID, message.Meta); err != nil {
+		message.Private, message.ContentType, message.SourceID, message.Meta, message.ReplyToSourceID); err != nil {
 		m.lo.Error("error inserting message in db", "error", err)
 		return envelope.NewError(envelope.GeneralError, m.i18n.T("globals.messages.somethingWentWrong"), nil)
 	}
 
-	if err := m.mediaStore.LinkMessageMediaTx(tx, message.ID, message.Media, inlineUUIDs); err != nil {
+	uploadUserID := message.UploadUserID
+	if message.SenderType == models.SenderTypeAgent {
+		uploadUserID = message.SenderID
+	}
+	if err := m.mediaStore.LinkMessageMediaTx(tx, message.ID, message.Media, inlineUUIDs, uploadUserID); err != nil {
+		var inputError envelope.Error
+		if errors.As(err, &inputError) {
+			return err
+		}
 		return envelope.NewError(envelope.GeneralError, m.i18n.T("globals.messages.somethingWentWrong"), nil)
 	}
 
@@ -764,8 +864,13 @@ func (m *Manager) ProcessIncomingMessage(in models.IncomingMessage) (models.Mess
 }
 
 func (m *Manager) processIncomingMessage(ctx context.Context, in models.IncomingMessage) (models.Message, error) {
-	// Return early if this message already exists (same source ID).
-	dupConvID, err := m.messageExistsBySourceID([]string{in.SourceID.String})
+	addressID, err := m.resolveIncomingAddress(in.InboxID, in.EmailAlias)
+	if err != nil {
+		return models.Message{}, err
+	}
+	in.AddressID = addressID
+	// Return early if this message already exists at this recipient address.
+	dupConvID, err := m.messageExistsBySourceID([]string{in.SourceID.String}, addressID)
 	if err != nil && err != errConversationNotFound {
 		return models.Message{}, err
 	}
@@ -837,7 +942,21 @@ func (m *Manager) processIncomingMessage(ctx context.Context, in models.Incoming
 				return models.Message{}, fmt.Errorf("deleting conversation after message insert failure: %w", delErr)
 			}
 		}
+		// The unique address/source reservation in the insert transaction wins
+		// races between receivers. A losing provisional conversation is gone;
+		// acknowledge the already committed copy rather than retrying forever.
+		if in.SourceID.String != "" {
+			if existing, checkErr := m.messageExistsBySourceID([]string{in.SourceID.String}, in.AddressID); checkErr == nil && existing > 0 {
+				return models.Message{}, nil
+			}
+		}
 		return models.Message{}, fmt.Errorf("inserting message: %w", err)
+	}
+
+	if isNewConversation {
+		if item, err := m.GetConversationListItem(conversationUUID); err == nil {
+			m.BroadcastNewConversation(&item)
+		}
 	}
 
 	// When a customer replies to a continuity emailsync the message to their live chat widget via WebSocket.
@@ -881,6 +1000,10 @@ func (m *Manager) resolveByPlusAddress(in *models.IncomingMessage) (senderID, co
 		return 0, 0, "", fmt.Errorf("fetching conversation: %w", err)
 	}
 
+	if conversation.InboxID != in.InboxID || !conversation.AddressID.Valid || conversation.AddressID.Int != in.AddressID {
+		return 0, 0, "", nil
+	}
+
 	m.lo.Debug("matched conversation by plus-addressed Reply-To", "conversation_uuid", conversation.UUID, "contact_email", in.Contact.Email.String)
 
 	conversationID = conversation.ID
@@ -898,34 +1021,14 @@ func (m *Manager) resolveByPlusAddress(in *models.IncomingMessage) (senderID, co
 	return 0, conversationID, conversationUUID, nil
 }
 
-// MessageExists checks if a message with the given messageID exists.
-func (m *Manager) MessageExists(messageID string) (bool, error) {
-	_, err := m.messageExistsBySourceID([]string{messageID})
-	if err != nil {
-		if errors.Is(err, errConversationNotFound) {
-			return false, nil
-		}
-		m.lo.Error("error fetching message from db", "error", err)
-		return false, err
-	}
-	return true, nil
-}
-
 // EnqueueIncoming enqueues an incoming message for inserting in db.
 func (m *Manager) EnqueueIncoming(message models.IncomingMessage) error {
-	m.closedMu.Lock()
-	defer m.closedMu.Unlock()
+	m.closedMu.RLock()
+	defer m.closedMu.RUnlock()
 	if m.closed {
 		return errors.New("incoming message queue is closed")
 	}
-
-	select {
-	case m.incomingMessageQueue <- message:
-		return nil
-	default:
-		m.lo.Warn("WARNING: incoming message queue is full")
-		return errors.New("incoming message queue is full")
-	}
+	return m.persistIncoming(message)
 }
 
 // GetConversationByMessageID returns conversation by message id.
@@ -1131,11 +1234,25 @@ func (m *Manager) findOrCreateConversation(in models.IncomingMessage) (int, stri
 	m.lo.Debug("searching conversation using in-reply-to and references", "in_reply_to", in.InReplyTo, "references", in.References)
 
 	sourceIDs := append([]string{in.InReplyTo}, in.References...)
-	conversationID, err = m.messageExistsBySourceID(sourceIDs)
+	conversationID, err = m.messageExistsBySourceID(sourceIDs, in.AddressID)
 	if err != nil && err != errConversationNotFound {
 		return 0, "", false, err
 	}
 
+	// A failed earlier delivery may still be staged. Wait for that parent
+	// rather than creating a second thread while its transient failure retries.
+	if conversationID == 0 {
+		refs := stringutil.RemoveItemByValue(stringutil.RemoveEmpty(sourceIDs), in.SourceID.String)
+		if len(refs) > 0 {
+			var pending bool
+			if err := m.db.Get(&pending, `SELECT EXISTS(SELECT 1 FROM incoming_mail_queue q JOIN email_addresses a ON a.inbox_id=q.inbox_id AND lower(a.address)=lower(COALESCE(NULLIF(q.payload->>'EmailAlias',''),(SELECT address FROM email_addresses WHERE inbox_id=q.inbox_id AND kind='mailbox' LIMIT 1))) WHERE a.id=$1 AND q.completed_at IS NULL AND q.payload->>'SourceID'=ANY($2::text[]))`, in.AddressID, pq.Array(refs)); err != nil {
+				return 0, "", false, err
+			}
+			if pending {
+				return 0, "", false, fmt.Errorf("referenced parent email is awaiting ingestion")
+			}
+		}
+	}
 	// Conversation not found, create one.
 	if conversationID == 0 {
 		m.lo.Debug("no conversation found with in-reply-to and references, creating new conversation", "in_reply_to", in.InReplyTo, "references", in.References)
@@ -1145,10 +1262,7 @@ func (m *Manager) findOrCreateConversation(in models.IncomingMessage) (int, stri
 		if in.EmailAlias != "" {
 			conversationMeta["email_alias"] = in.EmailAlias
 		}
-		addressID, err := m.resolveIncomingAddress(in.InboxID, in.EmailAlias)
-		if err != nil {
-			return 0, "", false, err
-		}
+		addressID := in.AddressID
 		conversationID, conversationUUID, err = m.CreateConversation(in.Contact.ID,
 			in.InboxID,
 			addressID,
@@ -1182,7 +1296,7 @@ func (m *Manager) resolveIncomingAddress(inboxID int, recipient string) (int, er
 	var id int
 	if recipient != "" {
 		err := m.db.Get(&id, `SELECT id FROM email_addresses
-			WHERE inbox_id=$1 AND enabled AND lower(address)=lower($2)`, inboxID, recipient)
+			WHERE inbox_id=$1 AND lower(address)=lower($2)`, inboxID, recipient)
 		if err == nil {
 			return id, nil
 		}
@@ -1191,20 +1305,20 @@ func (m *Manager) resolveIncomingAddress(inboxID int, recipient string) (int, er
 		}
 	}
 	if err := m.db.Get(&id, `SELECT id FROM email_addresses
-		WHERE inbox_id=$1 AND enabled AND kind='mailbox' ORDER BY id LIMIT 1`, inboxID); err != nil {
+		WHERE inbox_id=$1 AND kind='mailbox' ORDER BY id LIMIT 1`, inboxID); err != nil {
 		return 0, fmt.Errorf("resolving incoming address for inbox %d: %w", inboxID, err)
 	}
 	return id, nil
 }
 
 // messageExistsBySourceID returns conversation ID if a message with any of the given source IDs exists.
-func (m *Manager) messageExistsBySourceID(messageSourceIDs []string) (int, error) {
+func (m *Manager) messageExistsBySourceID(messageSourceIDs []string, addressID int) (int, error) {
 	messageSourceIDs = stringutil.RemoveEmpty(messageSourceIDs)
 	if len(messageSourceIDs) == 0 {
 		return 0, errConversationNotFound
 	}
 	var conversationID int
-	if err := m.q.MessageExistsBySourceID.QueryRow(pq.Array(messageSourceIDs)).Scan(&conversationID); err != nil {
+	if err := m.q.MessageExistsBySourceID.QueryRow(pq.Array(messageSourceIDs), addressID).Scan(&conversationID); err != nil {
 		if err == sql.ErrNoRows {
 			return conversationID, errConversationNotFound
 		}

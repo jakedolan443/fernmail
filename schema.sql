@@ -257,6 +257,20 @@ CREATE TABLE email_address_teams (
 CREATE INDEX index_email_address_users_on_user_id ON email_address_users(user_id);
 CREATE INDEX index_email_address_teams_on_team_id ON email_address_teams(team_id);
 
+DROP TABLE IF EXISTS team_members CASCADE;
+CREATE TABLE team_members (
+	id SERIAL PRIMARY KEY,
+	created_at TIMESTAMPTZ DEFAULT NOW(),
+	updated_at TIMESTAMPTZ DEFAULT NOW(),
+	-- Cascade deletes when team or user is deleted.
+	team_id BIGINT REFERENCES teams(id) ON DELETE CASCADE ON UPDATE CASCADE NOT NULL,
+	user_id BIGINT REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE NOT NULL,
+	emoji TEXT NULL,
+	CONSTRAINT constraint_team_members_on_emoji CHECK (length(emoji) <= 1)
+);
+CREATE UNIQUE INDEX index_unique_team_members_on_team_id_and_user_id ON team_members (team_id, user_id);
+CREATE INDEX index_team_members_on_user_id ON team_members (user_id);
+
 -- Address policies are the sole user-facing access control. The IMAP/SMTP
 -- transport is implementation detail, so a hidden transport policy can never
 -- override an explicit Address grant.
@@ -515,20 +529,6 @@ CREATE TABLE settings (
 );
 CREATE INDEX index_settings_on_key ON settings USING btree ("key");
 
-DROP TABLE IF EXISTS team_members CASCADE;
-CREATE TABLE team_members (
-	id SERIAL PRIMARY KEY,
-	created_at TIMESTAMPTZ DEFAULT NOW(),
-	updated_at TIMESTAMPTZ DEFAULT NOW(),
-	-- Cascade deletes when team or user is deleted.
-	team_id BIGINT REFERENCES teams(id) ON DELETE CASCADE ON UPDATE CASCADE NOT NULL,
-	user_id BIGINT REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE NOT NULL,
-	emoji TEXT NULL,
-	CONSTRAINT constraint_team_members_on_emoji CHECK (length(emoji) <= 1)
-);
-CREATE UNIQUE INDEX index_unique_team_members_on_team_id_and_user_id ON team_members (team_id, user_id);
-CREATE INDEX index_team_members_on_user_id ON team_members (user_id);
-
 DROP TABLE IF EXISTS templates CASCADE;
 CREATE TABLE templates (
 	id SERIAL PRIMARY KEY,
@@ -619,3 +619,88 @@ VALUES
 		'Role for users who have complete access to everything.',
 		'{webhooks:manage,general_settings:manage,oidc:manage,conversations:read_all,conversations:read,conversations:update_status,messages:read,messages:write,messages:write_private,status:manage,users:manage,inboxes:manage,templates:manage}'
 	);
+
+-- BEGIN mail_reliability schema
+-- Durable mailbox progress and retries; a new UIDVALIDITY gets an independent full scan.
+CREATE TABLE IF NOT EXISTS mail_sync_cursors (
+ inbox_id integer NOT NULL REFERENCES inboxes(id) ON DELETE CASCADE,
+ mailbox_key text NOT NULL, uid_validity bigint NOT NULL, last_uid bigint NOT NULL DEFAULT 0,
+ PRIMARY KEY(inbox_id,mailbox_key,uid_validity)
+);
+CREATE TABLE IF NOT EXISTS mail_sync_failures (
+ inbox_id integer NOT NULL REFERENCES inboxes(id) ON DELETE CASCADE,
+ mailbox_key text NOT NULL, uid_validity bigint NOT NULL, uid bigint NOT NULL,
+ error text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(inbox_id,mailbox_key,uid_validity,uid)
+);
+CREATE TABLE IF NOT EXISTS incoming_mail_queue (
+ id bigserial PRIMARY KEY, inbox_id integer NOT NULL REFERENCES inboxes(id) ON DELETE CASCADE,
+ delivery_key text NOT NULL UNIQUE, payload jsonb, attempts integer NOT NULL DEFAULT 0,
+ next_attempt_at timestamptz NOT NULL DEFAULT now(), lease_until timestamptz,
+ claim_token uuid, last_error text, completed_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS incoming_mail_queue_pending ON incoming_mail_queue(next_attempt_at) WHERE completed_at IS NULL;
+CREATE INDEX IF NOT EXISTS incoming_mail_queue_inbox_pending ON incoming_mail_queue(inbox_id,id) WHERE completed_at IS NULL;
+CREATE INDEX IF NOT EXISTS incoming_mail_queue_completed ON incoming_mail_queue(completed_at,id) WHERE completed_at IS NOT NULL;
+-- Protect address-local Message-ID identity without deleting historical duplicates.
+CREATE TABLE IF NOT EXISTS received_mail_sources (
+ address_id integer NOT NULL REFERENCES email_addresses(id) ON DELETE CASCADE,
+ source_id text NOT NULL, message_id bigint NOT NULL REFERENCES conversation_messages(id) ON DELETE CASCADE,
+ PRIMARY KEY(address_id,source_id)
+);
+INSERT INTO received_mail_sources(address_id,source_id,message_id)
+ SELECT c.address_id,m.source_id,min(m.id) FROM conversation_messages m JOIN conversations c ON c.id=m.conversation_id
+ WHERE c.address_id IS NOT NULL AND m.type='incoming' AND m.source_id IS NOT NULL AND m.source_id<>''
+ GROUP BY c.address_id,m.source_id ON CONFLICT DO NOTHING;
+CREATE OR REPLACE FUNCTION reserve_received_mail_source() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE endpoint integer;
+BEGIN
+ IF NEW.type='incoming' AND NEW.source_id IS NOT NULL AND NEW.source_id<>'' THEN
+  SELECT address_id INTO endpoint FROM conversations WHERE id=NEW.conversation_id;
+  IF endpoint IS NOT NULL THEN
+   INSERT INTO received_mail_sources(address_id,source_id,message_id) VALUES(endpoint,NEW.source_id,NEW.id);
+  END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS reserve_received_mail_source ON conversation_messages;
+CREATE TRIGGER reserve_received_mail_source AFTER INSERT ON conversation_messages FOR EACH ROW EXECUTE FUNCTION reserve_received_mail_source();
+CREATE TABLE IF NOT EXISTS mail_delivery_attempts (
+ id bigserial PRIMARY KEY, message_id bigint NOT NULL REFERENCES conversation_messages(id) ON DELETE CASCADE,
+ token uuid NOT NULL UNIQUE, state text NOT NULL CHECK(state IN ('sending','sent','failed','unknown','retry_authorized')),
+ created_at timestamptz NOT NULL DEFAULT now(), lease_until timestamptz NOT NULL,
+ finished_at timestamptz, error text
+);
+CREATE UNIQUE INDEX IF NOT EXISTS mail_delivery_attempts_active ON mail_delivery_attempts(message_id) WHERE state IN ('sending','unknown');
+ALTER TABLE conversation_messages ADD COLUMN IF NOT EXISTS reply_to_source_id text NOT NULL DEFAULT '';
+-- END mail_reliability schema
+
+-- BEGIN media_ownership schema
+-- Browser uploads have an owner before any message or draft refers to them.
+-- Existing unlinked files have no trustworthy uploader provenance; do not infer
+-- ownership from user-controlled legacy draft metadata. Reupload those files.
+ALTER TABLE media ADD COLUMN IF NOT EXISTS uploaded_by BIGINT REFERENCES users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS index_media_on_uploaded_by ON media(uploaded_by) WHERE uploaded_by IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS conversation_draft_media (
+    draft_id BIGINT NOT NULL REFERENCES conversation_drafts(id) ON DELETE CASCADE,
+    media_id INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+    PRIMARY KEY (draft_id, media_id)
+);
+CREATE INDEX IF NOT EXISTS index_conversation_draft_media_on_media_id ON conversation_draft_media(media_id);
+
+-- Protect existing draft references from collection without granting ownership.
+-- Match strings instead of casting legacy metadata supplied by browsers.
+INSERT INTO conversation_draft_media(draft_id, media_id)
+SELECT DISTINCT d.id, m.id
+FROM conversation_drafts d JOIN media m ON
+    d.content LIKE '%cid:ldsk-' || m.uuid::text || '%'
+    OR d.content LIKE '%/uploads/' || m.uuid::text || '%'
+    OR EXISTS (
+        SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(d.meta->'attachments')='array'
+            THEN d.meta->'attachments' ELSE '[]'::jsonb END) attachment
+        WHERE attachment->>'id'=m.id::text OR attachment->>'uuid'=m.uuid::text
+    )
+WHERE COALESCE(m.model_id,0)=0 AND (m.model_type='messages' OR m.model_type IS NULL)
+ON CONFLICT DO NOTHING;
+-- END media_ownership schema
