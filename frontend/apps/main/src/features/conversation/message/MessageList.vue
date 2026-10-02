@@ -65,6 +65,21 @@
             </div>
           </div>
         </TransitionGroup>
+
+        <!-- Contributor emails waiting for review in this conversation. -->
+        <div v-if="pendingReviews.length && !conversationStore.messages.loading" class="mt-4 space-y-3">
+          <ReviewSubmission v-for="review in pendingReviews" :key="review.uuid" :review="review">
+            <template #actions>
+              <router-link
+                v-if="reviewStore.isReviewer && review.author_id !== userStore.userID"
+                :to="{ name: 'reviews', params: { uuid: review.uuid } }"
+                class="inline-flex h-8 items-center rounded-md bg-review px-3 text-xs font-medium text-review-foreground hover:bg-review/90"
+              >
+                {{ $t('review.openInQueue') }}
+              </router-link>
+            </template>
+          </ReviewSubmission>
+        </div>
       </div>
 
       <!-- Typing indicator -->
@@ -101,6 +116,8 @@ import { isSameDay } from 'date-fns'
 import { useEmitter } from '@main/composables/useEmitter'
 import { EMITTER_EVENTS } from '@main/constants/emitterEvents'
 import MessagesSkeleton from './MessagesSkeleton.vue'
+import ReviewSubmission from '@main/features/review/ReviewSubmission.vue'
+import { useReviewStore } from '@main/stores/review'
 import { TypingIndicator } from '@shared-ui/components/TypingIndicator'
 import { useStickyScroll } from '@shared-ui/composables'
 
@@ -113,6 +130,10 @@ const route = useRoute()
 
 const conversationStore = useConversationStore()
 const userStore = useUserStore()
+const reviewStore = useReviewStore()
+const pendingReviews = computed(() =>
+  reviewStore.conversationReviews(conversationStore.current?.uuid).filter((review) => review.status === 'pending')
+)
 const isEmailConversation = computed(() => conversationStore.current?.inbox_channel === 'email')
 const firstEmailUUID = computed(
   () =>

@@ -29,11 +29,11 @@ func TestAddressLifecyclePreservesHistoricalRouting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.Create(Address{InboxID: inboxID, Address: "duplicate@example.test", Kind: KindMailbox, Enabled: true, Restricted: true}); err == nil {
+	if _, err := manager.Create(Address{InboxID: inboxID, Address: "duplicate@example.test", Kind: KindMailbox, Enabled: true}); err == nil {
 		t.Fatal("expected direct primary-address creation to be rejected")
 	}
 
-	alias, err := manager.Create(Address{InboxID: inboxID, Address: "support@example.test", Kind: KindAlias, Enabled: true, Restricted: true, UserIDs: []int{agentID}})
+	alias, err := manager.Create(Address{InboxID: inboxID, Address: "support@example.test", Kind: KindAlias, Enabled: true, UserIDs: []int{agentID}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,13 +42,13 @@ func TestAddressLifecyclePreservesHistoricalRouting(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := manager.Update(alias.ID, Address{InboxID: inboxID, Address: "help@example.test", Kind: KindAlias, Enabled: true, Restricted: true}); err == nil || !strings.Contains(err.Error(), "cannot be moved or renamed") {
+	if _, err := manager.Update(alias.ID, Address{InboxID: inboxID, Address: "help@example.test", Kind: KindAlias, Enabled: true}); err == nil || !strings.Contains(err.Error(), "cannot be moved or renamed") {
 		t.Fatalf("renaming historical alias error = %v", err)
 	}
 	if _, err := manager.Delete(alias.ID); err == nil || !strings.Contains(err.Error(), "must be disabled") {
 		t.Fatalf("deleting historical alias error = %v", err)
 	}
-	if _, err := manager.Update(alias.ID, Address{InboxID: inboxID, Address: alias.Address, Kind: KindAlias, Enabled: false, Restricted: true, UserIDs: []int{agentID}}); err != nil {
+	if _, err := manager.Update(alias.ID, Address{InboxID: inboxID, Address: alias.Address, Kind: KindAlias, Enabled: false, UserIDs: []int{agentID}}); err != nil {
 		t.Fatalf("disabling historical alias: %v", err)
 	}
 	// Address grants are canonical. A stale transport restriction must not
@@ -57,7 +57,7 @@ func TestAddressLifecyclePreservesHistoricalRouting(t *testing.T) {
 	if allowed, err := manager.CanAccess(agentID, alias.ID); err != nil || !allowed {
 		t.Fatalf("disabled historical alias with an explicit grant should stay readable: allowed=%v err=%v", allowed, err)
 	}
-	if _, err := manager.Update(primary.ID, Address{InboxID: inboxID, Address: "renamed@example.test", Kind: KindMailbox, Enabled: true, Restricted: true}); err == nil || !strings.Contains(err.Error(), "owned by its transport") {
+	if _, err := manager.Update(primary.ID, Address{InboxID: inboxID, Address: "renamed@example.test", Kind: KindMailbox, Enabled: true}); err == nil || !strings.Contains(err.Error(), "owned by its transport") {
 		t.Fatalf("renaming primary error = %v", err)
 	}
 }
@@ -89,16 +89,16 @@ func TestAccessibleAddressesListMailboxesBeforeAliases(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, address := range []Address{
-		{ID: director.ID, InboxID: firstInboxID, Address: director.Address, Kind: KindMailbox, Enabled: true, Restricted: true, UserIDs: []int{agentID}},
-		{ID: support.ID, InboxID: secondInboxID, Address: support.Address, Kind: KindMailbox, Enabled: true, Restricted: true, UserIDs: []int{agentID}},
+		{ID: director.ID, InboxID: firstInboxID, Address: director.Address, Kind: KindMailbox, Enabled: true, UserIDs: []int{agentID}},
+		{ID: support.ID, InboxID: secondInboxID, Address: support.Address, Kind: KindMailbox, Enabled: true, UserIDs: []int{agentID}},
 	} {
 		if _, err := manager.Update(address.ID, address); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, address := range []Address{
-		{InboxID: firstInboxID, Address: "billing@example.test", Kind: KindAlias, Enabled: true, Restricted: true, UserIDs: []int{agentID}},
-		{InboxID: secondInboxID, Address: "contact@example.test", Kind: KindAlias, Enabled: true, Restricted: true, UserIDs: []int{agentID}},
+		{InboxID: firstInboxID, Address: "billing@example.test", Kind: KindAlias, Enabled: true, UserIDs: []int{agentID}},
+		{InboxID: secondInboxID, Address: "contact@example.test", Kind: KindAlias, Enabled: true, UserIDs: []int{agentID}},
 	} {
 		if _, err := manager.Create(address); err != nil {
 			t.Fatal(err)

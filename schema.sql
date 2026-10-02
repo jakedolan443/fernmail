@@ -207,11 +207,9 @@ RETURNS BOOLEAN LANGUAGE SQL STABLE AS $$
     SELECT EXISTS (
         SELECT 1 FROM inboxes i
         JOIN users u ON u.id = viewer AND u.type = 'agent' AND u.enabled AND u.deleted_at IS NULL
-        LEFT JOIN inbox_access a ON a.inbox_id = i.id
         WHERE i.id = target_inbox AND i.channel = 'email' AND i.deleted_at IS NULL
         AND (
-            NOT COALESCE(a.restricted, FALSE)
-            OR u.email = 'System'
+            u.email = 'System'
             OR EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
                        WHERE ur.user_id = viewer AND r.name = 'Admin')
             OR EXISTS (SELECT 1 FROM inbox_users iu WHERE iu.inbox_id = i.id AND iu.user_id = viewer)
@@ -235,7 +233,6 @@ CREATE TABLE email_addresses (
     display_name TEXT NOT NULL DEFAULT '',
     kind TEXT NOT NULL DEFAULT 'alias' CHECK (kind IN ('mailbox', 'alias')),
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    restricted BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT constraint_email_addresses_address CHECK (length(address) <= 320),
     CONSTRAINT constraint_email_addresses_display_name CHECK (length(display_name) <= 140)
 );
@@ -273,7 +270,8 @@ CREATE INDEX index_team_members_on_user_id ON team_members (user_id);
 
 -- Address policies are the sole user-facing access control. The IMAP/SMTP
 -- transport is implementation detail, so a hidden transport policy can never
--- override an explicit Address grant.
+-- override an explicit Address grant. Admins see every address; everyone else
+-- needs a direct or team grant, there is no open-to-all address.
 CREATE OR REPLACE FUNCTION can_access_email_address(target_address INTEGER, viewer BIGINT)
 RETURNS BOOLEAN LANGUAGE SQL STABLE AS $$
     SELECT EXISTS (
@@ -285,8 +283,7 @@ RETURNS BOOLEAN LANGUAGE SQL STABLE AS $$
         JOIN users u ON u.id = viewer AND u.type = 'agent' AND u.enabled AND u.deleted_at IS NULL
         WHERE a.id = target_address
           AND (
-              NOT a.restricted
-              OR u.email = 'System'
+              u.email = 'System'
               OR EXISTS (
                   SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
                   WHERE ur.user_id = viewer AND r.name = 'Admin'
@@ -608,7 +605,16 @@ VALUES
 	(
 		'Agent',
 		'Role for all agents with limited access to conversations.',
-		'{conversations:read_all,conversations:read,conversations:update_status,messages:read,messages:write,messages:write_private}'
+		'{conversations:read_all,conversations:read,conversations:update_status,conversations:create,messages:read,messages:write,messages:write_private,reviews:manage}'
+	);
+
+INSERT INTO
+	roles ("name", description, permissions)
+VALUES
+	(
+		'Contributor',
+		'Reads assigned addresses; replies and new emails are reviewed before sending.',
+		'{conversations:read_all,conversations:read,conversations:create,messages:read,reviews:submit}'
 	);
 
 INSERT INTO
@@ -617,7 +623,7 @@ VALUES
 	(
 		'Admin',
 		'Role for users who have complete access to everything.',
-		'{webhooks:manage,general_settings:manage,oidc:manage,conversations:read_all,conversations:read,conversations:update_status,messages:read,messages:write,messages:write_private,status:manage,users:manage,inboxes:manage,templates:manage}'
+		'{webhooks:manage,general_settings:manage,oidc:manage,conversations:read_all,conversations:read,conversations:update_status,conversations:create,messages:read,messages:write,messages:write_private,reviews:manage,status:manage,users:manage,inboxes:manage,templates:manage}'
 	);
 
 -- BEGIN mail_reliability schema
@@ -704,3 +710,49 @@ FROM conversation_drafts d JOIN media m ON
 WHERE COALESCE(m.model_id,0)=0 AND (m.model_type='messages' OR m.model_type IS NULL)
 ON CONFLICT DO NOTHING;
 -- END media_ownership schema
+
+-- BEGIN outbound_reviews schema
+-- Contributor emails wait here until an Admin or Agent approves or denies them.
+-- A submission is not a message: it is never dispatched, searched or counted
+-- as unread. Approval queues a real message in the same transaction.
+CREATE TABLE IF NOT EXISTS outbound_reviews (
+    id BIGSERIAL PRIMARY KEY,
+    "uuid" UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    kind TEXT NOT NULL CHECK (kind IN ('reply', 'new')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied', 'withdrawn')),
+    author_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    address_id INTEGER NOT NULL REFERENCES email_addresses(id) ON DELETE CASCADE,
+    conversation_id BIGINT REFERENCES conversations(id) ON DELETE CASCADE,
+    subject TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL,
+    "to" TEXT[] NOT NULL DEFAULT '{}'::TEXT[],
+    cc TEXT[] NOT NULL DEFAULT '{}'::TEXT[],
+    bcc TEXT[] NOT NULL DEFAULT '{}'::TEXT[],
+    reviewer_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMPTZ,
+    decision_note TEXT NOT NULL DEFAULT '',
+    dismissed_at TIMESTAMPTZ,
+    message_id BIGINT REFERENCES conversation_messages(id) ON DELETE SET NULL,
+    CONSTRAINT constraint_outbound_reviews_reply_conversation CHECK (kind <> 'reply' OR conversation_id IS NOT NULL),
+    CONSTRAINT constraint_outbound_reviews_subject CHECK (length(subject) <= 998),
+    CONSTRAINT constraint_outbound_reviews_content CHECK (length(content) <= 1048576),
+    CONSTRAINT constraint_outbound_reviews_note CHECK (length(decision_note) <= 2000)
+);
+CREATE INDEX IF NOT EXISTS index_outbound_reviews_on_status_and_address ON outbound_reviews(status, address_id);
+CREATE INDEX IF NOT EXISTS index_outbound_reviews_on_author_and_status ON outbound_reviews(author_id, status);
+CREATE INDEX IF NOT EXISTS index_outbound_reviews_on_conversation_id ON outbound_reviews(conversation_id);
+-- One pending reply per contributor per conversation; the composer locks meanwhile.
+CREATE UNIQUE INDEX IF NOT EXISTS index_unique_outbound_reviews_pending_reply
+    ON outbound_reviews(author_id, conversation_id) WHERE status = 'pending' AND kind = 'reply';
+
+-- Uploads referenced by a submission are protected from cleanup like draft uploads.
+CREATE TABLE IF NOT EXISTS outbound_review_media (
+    review_id BIGINT NOT NULL REFERENCES outbound_reviews(id) ON DELETE CASCADE,
+    media_id INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+    inline BOOLEAN NOT NULL DEFAULT FALSE,
+    PRIMARY KEY (review_id, media_id)
+);
+CREATE INDEX IF NOT EXISTS index_outbound_review_media_on_media_id ON outbound_review_media(media_id);
+-- END outbound_reviews schema

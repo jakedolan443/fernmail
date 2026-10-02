@@ -55,8 +55,8 @@ func initHandlers(g *fastglue.Fastglue, hub *ws.Hub) {
 	g.PUT("/api/v1/oidc/{id}", perm(handleUpdateOIDC, "oidc:manage"))
 	g.DELETE("/api/v1/oidc/{id}", perm(handleDeleteOIDC, "oidc:manage"))
 
-	// Conversations. Fernmail is address-first and reply-only: no global inbox,
-	// saved views, or agent-created outbound conversation endpoint is exposed.
+	// Conversations. Fernmail is address-first: no global inbox or saved views.
+	// New emails start from an address through /api/v1/compose.
 	g.GET("/api/v1/addresses", perm(handleGetAddresses, "conversations:read"))
 	g.GET("/api/v1/addresses/{id}/conversations", perm(handleGetAddressConversations, "conversations:read"))
 	g.POST("/api/v1/addresses/{id}/mark-read", perm(handleMarkAddressRead, "conversations:read"))
@@ -74,6 +74,20 @@ func initHandlers(g *fastglue.Fastglue, hub *ws.Hub) {
 	g.POST("/api/v1/conversations/{cuuid}/messages", auth(handleSendMessage))
 	g.PUT("/api/v1/conversations/{cuuid}/messages/{uuid}/retry", perm(handleRetryMessage, "messages:write"))
 	g.DELETE("/api/v1/conversations/{cuuid}/messages/{uuid}", perm(handleDeleteMessage, "messages:write_private"))
+	// Compose New and the review queue. messages:write sends directly;
+	// reviews:submit holds the email until an Admin or Agent approves it.
+	g.POST("/api/v1/compose", perm(handleCompose, "conversations:create"))
+	g.POST("/api/v1/conversations/{uuid}/reviews", perm(handleSubmitReplyReview, "reviews:submit"))
+	g.GET("/api/v1/conversations/{uuid}/reviews", perm(handleGetConversationReviews, "conversations:read"))
+	g.GET("/api/v1/reviews", auth(handleGetReviews))
+	g.GET("/api/v1/reviews/counts", auth(handleGetReviewCounts))
+	g.GET("/api/v1/reviews/{uuid}", auth(handleGetReview))
+	g.PUT("/api/v1/reviews/{uuid}", perm(handleResubmitReview, "reviews:submit"))
+	g.DELETE("/api/v1/reviews/{uuid}", auth(handleDiscardReview))
+	g.POST("/api/v1/reviews/{uuid}/approve", perm(handleApproveReview, "reviews:manage"))
+	g.POST("/api/v1/reviews/{uuid}/deny", perm(handleDenyReview, "reviews:manage"))
+	g.POST("/api/v1/reviews/{uuid}/withdraw", auth(handleWithdrawReview))
+	g.POST("/api/v1/reviews/{uuid}/dismiss", auth(handleDismissReview))
 	// Draft endpoints
 	g.GET("/api/v1/drafts", auth(handleGetAllDrafts))
 	g.POST("/api/v1/conversations/{uuid}/draft", auth(handleUpsertConversationDraft))
@@ -107,6 +121,11 @@ func initHandlers(g *fastglue.Fastglue, hub *ws.Hub) {
 	g.GET("/api/v1/agents/import/status", perm(handleGetAgentImportStatus, "users:manage"))
 	g.POST("/api/v1/agents/{id}/api-key", perm(handleGenerateAPIKey, "users:manage"))
 	g.DELETE("/api/v1/agents/{id}/api-key", perm(handleRevokeAPIKey, "users:manage"))
+	// Users settings screen: role, addresses and enabled state in one place.
+	g.GET("/api/v1/admin/users", perm(handleGetManagedUsers, "users:manage"))
+	g.POST("/api/v1/admin/users", perm(handleCreateManagedUser, "users:manage"))
+	g.PUT("/api/v1/admin/users/{id}/access", perm(handleUpdateManagedUserAccess, "users:manage"))
+	g.DELETE("/api/v1/admin/users/{id}", perm(handleDeleteManagedUser, "users:manage"))
 	g.POST("/api/v1/agents/reset-password", rateLimit(tryAuth(handleResetPassword), "auth"))
 	g.POST("/api/v1/agents/set-password", rateLimit(tryAuth(handleSetPassword), "auth"))
 
@@ -163,6 +182,8 @@ func initHandlers(g *fastglue.Fastglue, hub *ws.Hub) {
 	getAndHead("/", notAuthPage(serveIndexPage))
 	g.GET("/addresses/{all:*}", authPage(serveIndexPage))
 	g.GET("/search", authPage(serveIndexPage))
+	g.GET("/reviews", authPage(serveIndexPage))
+	g.GET("/reviews/{all:*}", authPage(serveIndexPage))
 	g.GET("/conversation/{all:*}", authPage(serveIndexPage))
 	// Keep legacy bookmarks client-routable while the frontend redirects them to
 	// their first accessible address.

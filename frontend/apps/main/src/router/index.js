@@ -54,6 +54,13 @@ const routes = [
         ]
       },
       {
+        path: '/reviews/:uuid?',
+        name: 'reviews',
+        component: () => import('@main/views/review/ReviewsView.vue'),
+        props: true,
+        meta: { titleKey: 'review.title', hidePageHeader: true }
+      },
+      {
         path: '/search',
         name: 'search',
         component: () => import('@main/views/search/SearchView.vue'),
@@ -81,6 +88,12 @@ const routes = [
             name: 'general',
             component: () => import('@main/views/admin/general/General.vue'),
             meta: { titleKey: 'globals.terms.general' }
+          },
+          {
+            path: 'users',
+            name: 'users',
+            component: () => import('@main/views/admin/users/UsersSettings.vue'),
+            meta: { titleKey: 'users.title' }
           },
           {
             path: 'resources',

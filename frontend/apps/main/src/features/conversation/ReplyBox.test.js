@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, h, nextTick, reactive } from 'vue'
-let store
-const { api } = vi.hoisted(() => ({ api: { sendMessage: vi.fn() } }))
+let store, review
+const { api } = vi.hoisted(() => ({ api: { sendMessage: vi.fn(), submitReplyForReview: vi.fn() } }))
 vi.mock('@main/api', () => ({ default: api }))
 vi.mock('@main/stores/conversation', () => ({ useConversationStore: () => store }))
+vi.mock('@main/stores/review', () => ({ useReviewStore: () => review }))
 vi.mock('@main/stores/user', () => ({ useUserStore: () => ({ can: () => true, userID: 1 }) }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key) => key }) }))
 vi.mock('@main/composables/useEmitter', () => ({
@@ -65,6 +66,18 @@ beforeEach(async () => {
     removePendingMessage: vi.fn(),
     replacePendingMessage: vi.fn(),
     updateStatus: vi.fn()
+  })
+  review = reactive({
+    needsReview: false,
+    enabled: true,
+    threads: {},
+    conversationReviews(uuid) {
+      return this.threads[uuid] || []
+    },
+    fetchConversationReviews: vi.fn(),
+    fetchCounts: vi.fn(),
+    withdraw: vi.fn(),
+    dismiss: vi.fn()
   })
   root = document.createElement('div')
   document.body.append(root)
@@ -129,5 +142,47 @@ describe('reply sends across navigation', () => {
     expect(root.querySelector('textarea').value).toBe('B draft')
     expect(drafts.get('A::reply').content).toBe('A reply')
     expect(store.updateStatus).not.toHaveBeenCalled()
+  })
+})
+
+describe('contributor replies', () => {
+  it('holds the reply for review instead of sending it, then locks the composer', async () => {
+    review.needsReview = true
+    api.submitReplyForReview.mockResolvedValue({ data: { data: { uuid: 'r1' } } })
+    review.fetchConversationReviews.mockImplementation(async (uuid) => {
+      review.threads[uuid] = [{ uuid: 'r1', status: 'pending', author_id: 1, preview: 'A reply' }]
+    })
+    type('A reply')
+    await settle()
+    root.querySelector('button').click()
+    await settle()
+    expect(api.sendMessage).not.toHaveBeenCalled()
+    expect(api.submitReplyForReview).toHaveBeenCalledWith(
+      'A',
+      expect.objectContaining({ content: 'A reply', to: ['alice@example.test'], attachments: [] })
+    )
+    // Contributors cannot change status, and the sent draft is cleared.
+    expect(store.updateStatus).not.toHaveBeenCalled()
+    expect(drafts.has('A::reply')).toBe(false)
+    expect(root.querySelector('textarea')).toBeNull()
+    expect(root.textContent).toContain('review.yourReplyAwaiting')
+  })
+
+  it('keeps the draft when the submission fails', async () => {
+    review.needsReview = true
+    api.submitReplyForReview.mockRejectedValue(new Error('offline'))
+    type('A reply')
+    await settle()
+    root.querySelector('button').click()
+    await settle()
+    expect(drafts.get('A::reply').content).toBe('A reply')
+    expect(root.querySelector('textarea').value).toBe('A reply')
+  })
+
+  it('shows why a reply came back', async () => {
+    review.threads.A = [{ uuid: 'r2', status: 'denied', author_id: 1, reviewer_name: 'Robin', decision_note: 'Add a greeting' }]
+    await settle()
+    expect(root.textContent).toContain('review.returnedNoticeReason')
+    expect(root.querySelector('textarea')).not.toBeNull()
   })
 })

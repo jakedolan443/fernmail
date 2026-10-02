@@ -194,6 +194,26 @@ const getAddressAccess = (id) => http.get(`/api/v1/admin/addresses/${id}/access`
 const createAddress = (data) => http.post('/api/v1/admin/addresses', data)
 const updateAddress = (id, data) => http.put(`/api/v1/admin/addresses/${id}`, data)
 const deleteAddress = (id) => http.delete(`/api/v1/admin/addresses/${id}`)
+// Compose New and the review queue.
+const composeEmail = (data) => http.post('/api/v1/compose', data)
+const submitReplyForReview = (uuid, data) => http.post(`/api/v1/conversations/${uuid}/reviews`, data)
+const getConversationReviews = (uuid) => http.get(`/api/v1/conversations/${uuid}/reviews`)
+const getReviews = () => http.get('/api/v1/reviews')
+const getReviewCounts = () => http.get('/api/v1/reviews/counts')
+const getReview = (uuid) => http.get(`/api/v1/reviews/${uuid}`)
+const approveReview = (uuid) => http.post(`/api/v1/reviews/${uuid}/approve`)
+const denyReview = (uuid, note) => http.post(`/api/v1/reviews/${uuid}/deny`, { note })
+const withdrawReview = (uuid) => http.post(`/api/v1/reviews/${uuid}/withdraw`)
+const dismissReview = (uuid) => http.post(`/api/v1/reviews/${uuid}/dismiss`)
+const resubmitReview = (uuid, data) => http.put(`/api/v1/reviews/${uuid}`, data)
+const discardReview = (uuid) => http.delete(`/api/v1/reviews/${uuid}`)
+
+// Users settings screen.
+const getManagedUsers = () => http.get('/api/v1/admin/users')
+const createManagedUser = (data) => http.post('/api/v1/admin/users', data)
+const updateManagedUserAccess = (id, data) => http.put(`/api/v1/admin/users/${id}/access`, data)
+const deleteManagedUser = (id) => http.delete(`/api/v1/admin/users/${id}`)
+
 const uploadMedia = (data) =>
   http.post('/api/v1/media', data, {
     headers: {
@@ -274,6 +294,22 @@ const initiateOAuthFlow = (provider, data) =>
   })
 
 export default {
+  composeEmail,
+  submitReplyForReview,
+  getConversationReviews,
+  getReviews,
+  getReviewCounts,
+  getReview,
+  approveReview,
+  denyReview,
+  withdrawReview,
+  dismissReview,
+  resubmitReview,
+  discardReview,
+  getManagedUsers,
+  createManagedUser,
+  updateManagedUserAccess,
+  deleteManagedUser,
   markAddressAsRead,
   login,
   deleteUser,

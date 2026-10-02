@@ -14,6 +14,8 @@ const (
 	MessageTypeListSubscribeReplace  = "list_subscribe_replace"
 	MessageTypeAgentAvailability     = "agent_availability_update"
 	MessageTypeSystemToast           = "system_toast"
+	MessageTypeReviewCreated         = "review_created"
+	MessageTypeReviewUpdated         = "review_updated"
 )
 
 // WSMessage represents a WS message.

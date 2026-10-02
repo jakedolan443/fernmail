@@ -27,7 +27,7 @@
               <div v-if="address.display_name" class="mt-0.5 text-xs text-muted-foreground">{{ address.display_name }}</div>
             </td>
             <td class="px-4 py-3 capitalize">{{ address.kind }}</td>
-            <td class="px-4 py-3">{{ address.restricted ? $t('address.restricted') : $t('address.allAgents') }}</td>
+            <td class="px-4 py-3">{{ accessSummary(address) }}</td>
             <td class="px-4 py-3"><Badge :variant="address.enabled ? 'success' : 'secondary'">{{ address.enabled ? $t('globals.terms.enabled') : $t('globals.terms.disabled') }}</Badge></td>
             <td class="px-4 py-3 text-right">
               <div class="inline-flex gap-1">
@@ -52,12 +52,21 @@ import LoadingOverlay from '@main/components/layout/LoadingOverlay.vue'
 import { handleHTTPError } from '@shared-ui/utils/http.js'
 import { useEmitter } from '@/composables/useEmitter'
 import { EMITTER_EVENTS } from '@/constants/emitterEvents'
+import { useI18n } from 'vue-i18n'
 import api from '@/api'
 
 const router = useRouter()
+const { t } = useI18n()
 const emitter = useEmitter()
 const loading = ref(false)
 const addresses = ref([])
+
+// Admins always have access; everyone else is granted it directly or by team.
+function accessSummary(address) {
+  const people = t('address.peopleCount', (address.user_ids || []).length)
+  const teams = (address.team_ids || []).length
+  return teams ? `${people} · ${t('address.teamCount', teams)}` : people
+}
 
 async function load() {
   loading.value = true

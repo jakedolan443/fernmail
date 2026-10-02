@@ -51,6 +51,7 @@ SELECT id, created_at, updated_at, "uuid", store, filename, content_type, conten
 FROM media
 WHERE (model_type = 'messages' OR model_type IS NULL)
   AND NOT EXISTS (SELECT 1 FROM conversation_draft_media dm WHERE dm.media_id = media.id)
+  AND NOT EXISTS (SELECT 1 FROM outbound_review_media rm WHERE rm.media_id = media.id)
   AND (
     ((model_id IS NULL OR model_id = 0) AND created_at < NOW() - INTERVAL '7 days')
     OR (model_id > 0 AND created_at < NOW() - INTERVAL '24 hours' AND NOT EXISTS (SELECT 1 FROM conversation_messages cm WHERE cm.id = media.model_id))

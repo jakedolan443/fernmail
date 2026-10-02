@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { conversations, notifyNewMessage } = vi.hoisted(() => ({
+const { conversations, notifyNewMessage, reviews } = vi.hoisted(() => ({
+  reviews: { handleLiveEvent: vi.fn(), fetchCounts: vi.fn() },
   conversations: {
     conversation: { data: null },
     conversations: { data: [] },
@@ -27,6 +28,7 @@ vi.mock('./stores/browserNotifications', () => ({
 }))
 vi.mock('./stores/users', () => ({ useUsersStore: () => ({}) }))
 vi.mock('./stores/user', () => ({ useUserStore: () => ({ userID: 1 }) }))
+vi.mock('./stores/review', () => ({ useReviewStore: () => reviews }))
 vi.mock('./stores/connection', () => ({ useConnectionStore: () => ({ setConnecting: vi.fn(), setConnectionFailed: vi.fn() }) }))
 vi.mock('./composables/useEmitter', () => ({ useEmitter: () => ({}) }))
 import { WebSocketClient } from './websocket'
@@ -81,6 +83,13 @@ describe('live mail delivery', () => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: true })
     receive('new_message', mail)
     expect(conversations.incrementUnread).toHaveBeenCalledWith('thread-1')
+  })
+  it('hands review queue events to the review store', () => {
+    const event = { uuid: 'review-1', status: 'pending', author_id: 2 }
+    receive('review_created', event)
+    receive('review_updated', { ...event, status: 'approved' })
+    expect(reviews.handleLiveEvent).toHaveBeenNthCalledWith(1, 'review_created', event)
+    expect(reviews.handleLiveEvent).toHaveBeenNthCalledWith(2, 'review_updated', { ...event, status: 'approved' })
   })
   it('does not duplicate alerts for new-conversation broadcasts or stale sockets', () => {
     receive('new_conversation', { uuid: 'thread-1' })

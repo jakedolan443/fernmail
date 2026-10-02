@@ -84,8 +84,8 @@ func TestConversationSearchFieldsAndRanking(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO inboxes (name, channel) VALUES ('Search test', 'email')`); err != nil {
 		t.Fatalf("inserting inbox: %v", err)
 	}
-	db.MustExec(`INSERT INTO email_addresses(inbox_id,address,kind,restricted)
-		SELECT id,'search@example.test','mailbox',false FROM inboxes WHERE name='Search test'`)
+	db.MustExec(`INSERT INTO email_addresses(inbox_id,address,kind)
+		SELECT id,'search@example.test','mailbox' FROM inboxes WHERE name='Search test'`)
 
 	oldest := time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
 	insertSearchConversation(t, db, "108", "exact-108@example.com", "Exact", "Contact", "Old subject", oldest)
@@ -121,6 +121,7 @@ func TestConversationSearchFieldsAndRanking(t *testing.T) {
 	if err := db.Get(&viewerID, `INSERT INTO users(type, email, first_name) VALUES ('agent','search-reader@example.test','Reader') RETURNING id`); err != nil {
 		t.Fatal(err)
 	}
+	db.MustExec(`INSERT INTO email_address_users(address_id,user_id) SELECT id,$1 FROM email_addresses`, viewerID)
 	scope := models.ReadScope{UserID: viewerID, Read: true, ReadAll: true}
 	results, hasMore, cursor, err := manager.Conversations(models.Query{Term: "108", PageSize: 10}, scope)
 	if err != nil {

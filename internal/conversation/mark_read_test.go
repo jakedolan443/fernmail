@@ -32,12 +32,13 @@ func TestMarkAddressReadScopesUserAddressAndSnapshot(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := db.Get(&addressA, `INSERT INTO email_addresses(inbox_id,address,restricted) VALUES($1,'a@example.test',false) RETURNING id`, inbox); err != nil {
+	if err := db.Get(&addressA, `INSERT INTO email_addresses(inbox_id,address) VALUES($1,'a@example.test') RETURNING id`, inbox); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Get(&addressB, `INSERT INTO email_addresses(inbox_id,address,restricted) VALUES($1,'b@example.test',false) RETURNING id`, inbox); err != nil {
+	if err := db.Get(&addressB, `INSERT INTO email_addresses(inbox_id,address) VALUES($1,'b@example.test') RETURNING id`, inbox); err != nil {
 		t.Fatal(err)
 	}
+	db.MustExec(`INSERT INTO email_address_users(address_id,user_id) SELECT a.id,u.id FROM email_addresses a CROSS JOIN users u WHERE u.type='agent'`)
 	var conversationA int
 	for _, status := range []string{"Open", "Closed", "Snoozed"} {
 		var id int
@@ -89,7 +90,7 @@ func TestMarkAddressReadScopesUserAddressAndSnapshot(t *testing.T) {
 		VALUES($1,$2,'contact','incoming','received',$3::timestamptz+interval '1 second')`, conversationA, sender, markedAt)
 	assertCounts(reader, 1, 1)
 	// Revocation is enforced in the mutation, not merely by the sidebar.
-	db.MustExec(`UPDATE email_addresses SET restricted=true WHERE id=$1`, addressA)
+	db.MustExec(`DELETE FROM email_address_users WHERE address_id=$1 AND user_id=$2`, addressA, reader)
 	if _, err := m.MarkAddressRead(context.Background(), reader, addressA, permissions, nil); err == nil {
 		t.Fatal("revoked address was marked read")
 	}
@@ -117,7 +118,6 @@ func (s readOrderingMediaStore) LinkMessageMediaTx(*sqlx.Tx, int, []mmodels.Medi
 
 func TestMarkAddressReadOrdersConcurrentMessageCommits(t *testing.T) {
 	m, db, inboxID, address, _ := mailTestManager(t)
-	db.MustExec(`UPDATE email_addresses SET restricted=false WHERE id=$1`, address)
 	first, err := m.ProcessIncomingMessage(testIncoming(inboxID, "a@example.test", "first@read.test", ""))
 	if err != nil {
 		t.Fatal(err)
@@ -126,6 +126,7 @@ func TestMarkAddressReadOrdersConcurrentMessageCommits(t *testing.T) {
 	if err := db.Get(&reader, `INSERT INTO users(type,email,first_name) VALUES('agent','reader@read.test','Reader') RETURNING id`); err != nil {
 		t.Fatal(err)
 	}
+	db.MustExec(`INSERT INTO email_address_users(address_id,user_id) VALUES($1,$2)`, address, reader)
 	permissions := []string{"conversations:read", "conversations:read_all"}
 	media := readOrderingMediaStore{inserted: make(chan struct{}), release: make(chan struct{})}
 	m.mediaStore = media

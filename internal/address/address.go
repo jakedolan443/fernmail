@@ -35,7 +35,6 @@ type Address struct {
 	DisplayName string    `db:"display_name" json:"display_name"`
 	Kind        string    `db:"kind" json:"kind"`
 	Enabled     bool      `db:"enabled" json:"enabled"`
-	Restricted  bool      `db:"restricted" json:"restricted"`
 	UserIDs     []int     `json:"user_ids,omitempty"`
 	TeamIDs     []int     `json:"team_ids,omitempty"`
 }
@@ -46,13 +45,13 @@ type Principal struct {
 }
 
 // Access contains the available people and teams as well as the selected
-// principals, so the settings page can edit one address atomically.
+// principals, so the settings page can edit one address atomically. There is
+// no open-to-all address: Admins see everything, everyone else needs a grant.
 type Access struct {
-	Restricted bool        `json:"restricted"`
-	UserIDs    []int       `json:"user_ids"`
-	TeamIDs    []int       `json:"team_ids"`
-	Users      []Principal `json:"users,omitempty"`
-	Teams      []Principal `json:"teams,omitempty"`
+	UserIDs []int       `json:"user_ids"`
+	TeamIDs []int       `json:"team_ids"`
+	Users   []Principal `json:"users,omitempty"`
+	Teams   []Principal `json:"teams,omitempty"`
 }
 
 type Manager struct {
@@ -93,7 +92,11 @@ func validateInput(in Address) (Address, error) {
 	if in.InboxID < 1 {
 		return Address{}, fmt.Errorf("transport inbox is required")
 	}
-	in.UserIDs = uniquePositive(in.UserIDs)
+	// A nil user list leaves per-user grants untouched: the Users settings
+	// screen owns them, the address form only edits team grants.
+	if in.UserIDs != nil {
+		in.UserIDs = uniquePositive(in.UserIDs)
+	}
 	in.TeamIDs = uniquePositive(in.TeamIDs)
 	return in, nil
 }
@@ -116,7 +119,7 @@ func (m *Manager) CanAccess(userID, addressID int) (bool, error) {
 
 func (m *Manager) Get(id int) (Address, error) {
 	var out Address
-	err := m.db.Get(&out, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled, restricted
+	err := m.db.Get(&out, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled
 		FROM email_addresses WHERE id=$1`, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return out, ErrNotFound
@@ -126,14 +129,14 @@ func (m *Manager) Get(id int) (Address, error) {
 
 func (m *Manager) GetForInbox(inboxID int) ([]Address, error) {
 	items := []Address{}
-	err := m.db.Select(&items, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled, restricted
+	err := m.db.Select(&items, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled
 		FROM email_addresses WHERE inbox_id=$1 ORDER BY CASE WHEN kind='mailbox' THEN 0 ELSE 1 END, lower(address), id`, inboxID)
 	return items, err
 }
 
 func (m *Manager) GetAccessible(userID int) ([]Address, error) {
 	items := []Address{}
-	err := m.db.Select(&items, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled, restricted
+	err := m.db.Select(&items, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled
 		FROM email_addresses WHERE can_access_email_address(id, $1)
 		ORDER BY CASE WHEN kind='mailbox' THEN 0 ELSE 1 END, lower(address), id`, userID)
 	return items, err
@@ -141,7 +144,7 @@ func (m *Manager) GetAccessible(userID int) ([]Address, error) {
 
 func (m *Manager) GetAll() ([]Address, error) {
 	items := []Address{}
-	if err := m.db.Select(&items, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled, restricted
+	if err := m.db.Select(&items, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled
 		FROM email_addresses ORDER BY CASE WHEN kind='mailbox' THEN 0 ELSE 1 END, lower(address), id`); err != nil {
 		return nil, err
 	}
@@ -154,6 +157,14 @@ func (m *Manager) GetAll() ([]Address, error) {
 		items[i].TeamIDs = access.TeamIDs
 	}
 	return items, nil
+}
+
+// GetAllCompact lists every address without its access grants.
+func (m *Manager) GetAllCompact() ([]Address, error) {
+	items := []Address{}
+	err := m.db.Select(&items, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled
+		FROM email_addresses ORDER BY CASE WHEN kind='mailbox' THEN 0 ELSE 1 END, lower(address), id`)
+	return items, err
 }
 
 // GetPrincipals returns the selectable access principals for a new address.
@@ -173,10 +184,11 @@ func (m *Manager) GetPrincipals() (Access, error) {
 
 func (m *Manager) GetAccess(addressID int) (Access, error) {
 	access := Access{UserIDs: []int{}, TeamIDs: []int{}, Users: []Principal{}, Teams: []Principal{}}
-	if err := m.db.Get(&access.Restricted, `SELECT restricted FROM email_addresses WHERE id=$1`, addressID); errors.Is(err, sql.ErrNoRows) {
-		return access, ErrNotFound
-	} else if err != nil {
+	var exists bool
+	if err := m.db.Get(&exists, `SELECT EXISTS(SELECT 1 FROM email_addresses WHERE id=$1)`, addressID); err != nil {
 		return access, err
+	} else if !exists {
+		return access, ErrNotFound
 	}
 	if err := m.db.Select(&access.UserIDs, `SELECT eau.user_id FROM email_address_users eau
 		JOIN users u ON u.id=eau.user_id
@@ -211,10 +223,10 @@ func (m *Manager) Create(in Address) (Address, error) {
 		return Address{}, err
 	}
 	var out Address
-	err = tx.Get(&out, `INSERT INTO email_addresses(inbox_id, address, display_name, kind, enabled, restricted)
-		VALUES($1,$2,$3,$4,$5,$6)
-		RETURNING id, created_at, updated_at, inbox_id, address, display_name, kind, enabled, restricted`,
-		in.InboxID, in.Address, in.DisplayName, in.Kind, in.Enabled, in.Restricted)
+	err = tx.Get(&out, `INSERT INTO email_addresses(inbox_id, address, display_name, kind, enabled)
+		VALUES($1,$2,$3,$4,$5)
+		RETURNING id, created_at, updated_at, inbox_id, address, display_name, kind, enabled`,
+		in.InboxID, in.Address, in.DisplayName, in.Kind, in.Enabled)
 	if err != nil {
 		return Address{}, err
 	}
@@ -242,7 +254,7 @@ func (m *Manager) Update(id int, in Address) (Address, error) {
 		return Address{}, err
 	}
 	var existing Address
-	if err := tx.Get(&existing, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled, restricted
+	if err := tx.Get(&existing, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled
 		FROM email_addresses WHERE id=$1 FOR UPDATE`, id); errors.Is(err, sql.ErrNoRows) {
 		return Address{}, ErrNotFound
 	} else if err != nil {
@@ -263,10 +275,10 @@ func (m *Manager) Update(id int, in Address) (Address, error) {
 	}
 	var out Address
 	err = tx.Get(&out, `UPDATE email_addresses
-		SET inbox_id=$2, address=$3, display_name=$4, kind=$5, enabled=$6, restricted=$7, updated_at=NOW()
+		SET inbox_id=$2, address=$3, display_name=$4, kind=$5, enabled=$6, updated_at=NOW()
 		WHERE id=$1
-		RETURNING id, created_at, updated_at, inbox_id, address, display_name, kind, enabled, restricted`,
-		id, in.InboxID, in.Address, in.DisplayName, in.Kind, in.Enabled, in.Restricted)
+		RETURNING id, created_at, updated_at, inbox_id, address, display_name, kind, enabled`,
+		id, in.InboxID, in.Address, in.DisplayName, in.Kind, in.Enabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Address{}, ErrNotFound
 	}
@@ -290,7 +302,7 @@ func (m *Manager) Delete(id int) (Address, error) {
 	}
 	defer tx.Rollback()
 	var out Address
-	if err := tx.Get(&out, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled, restricted
+	if err := tx.Get(&out, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled
 		FROM email_addresses WHERE id=$1 FOR UPDATE`, id); errors.Is(err, sql.ErrNoRows) {
 		return Address{}, ErrNotFound
 	} else if err != nil {
@@ -328,12 +340,12 @@ func (m *Manager) EnsureMailboxAddress(inboxID int, email string) (Address, erro
 		return Address{}, err
 	}
 	var out Address
-	err = tx.Get(&out, `INSERT INTO email_addresses(inbox_id, address, kind, enabled, restricted)
-		VALUES($1,$2,'mailbox',TRUE,TRUE)
+	err = tx.Get(&out, `INSERT INTO email_addresses(inbox_id, address, kind, enabled)
+		VALUES($1,$2,'mailbox',TRUE)
 		ON CONFLICT (lower(address)) DO NOTHING
-		RETURNING id, created_at, updated_at, inbox_id, address, display_name, kind, enabled, restricted`, inboxID, email)
+		RETURNING id, created_at, updated_at, inbox_id, address, display_name, kind, enabled`, inboxID, email)
 	if errors.Is(err, sql.ErrNoRows) {
-		err = tx.Get(&out, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled, restricted
+		err = tx.Get(&out, `SELECT id, created_at, updated_at, inbox_id, address, display_name, kind, enabled
 			FROM email_addresses WHERE lower(address)=lower($1) FOR UPDATE`, email)
 	}
 	if err != nil {
@@ -356,23 +368,27 @@ func validateTransport(tx *sqlx.Tx, inboxID int) error {
 	return nil
 }
 
+// replaceAccess replaces the address's team grants, and its user grants only
+// when userIDs is non-nil.
 func replaceAccess(tx *sqlx.Tx, addressID int, userIDs, teamIDs []int) error {
-	if err := validateIDs(tx, userIDs, `SELECT count(DISTINCT id) FROM users WHERE id=ANY($1) AND type='agent' AND deleted_at IS NULL`); err != nil {
-		return err
+	if userIDs != nil {
+		if err := validateIDs(tx, userIDs, `SELECT count(DISTINCT id) FROM users WHERE id=ANY($1) AND type='agent' AND deleted_at IS NULL`); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM email_address_users WHERE address_id=$1`, addressID); err != nil {
+			return err
+		}
+		if len(userIDs) > 0 {
+			if _, err := tx.Exec(`INSERT INTO email_address_users(address_id,user_id) SELECT $1, unnest($2::bigint[]) ON CONFLICT DO NOTHING`, addressID, pq.Array(userIDs)); err != nil {
+				return err
+			}
+		}
 	}
 	if err := validateIDs(tx, teamIDs, `SELECT count(DISTINCT id) FROM teams WHERE id=ANY($1)`); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM email_address_users WHERE address_id=$1`, addressID); err != nil {
-		return err
-	}
 	if _, err := tx.Exec(`DELETE FROM email_address_teams WHERE address_id=$1`, addressID); err != nil {
 		return err
-	}
-	if len(userIDs) > 0 {
-		if _, err := tx.Exec(`INSERT INTO email_address_users(address_id,user_id) SELECT $1, unnest($2::bigint[]) ON CONFLICT DO NOTHING`, addressID, pq.Array(userIDs)); err != nil {
-			return err
-		}
 	}
 	if len(teamIDs) > 0 {
 		if _, err := tx.Exec(`INSERT INTO email_address_teams(address_id,team_id) SELECT $1, unnest($2::int[]) ON CONFLICT DO NOTHING`, addressID, pq.Array(teamIDs)); err != nil {

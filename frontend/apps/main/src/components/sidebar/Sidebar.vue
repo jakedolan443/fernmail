@@ -18,7 +18,7 @@ import {
   SidebarMenuItem,
   SidebarProvider
 } from '@shared-ui/components/ui/sidebar'
-import { ArrowLeft, ChevronRight, Mail, Search } from 'lucide-vue-next'
+import { ArrowLeft, ChevronRight, Mail, Search, ShieldCheck, SquarePen } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
@@ -26,6 +26,9 @@ import { useAppSettingsStore } from '@main/stores/appSettings'
 import { useUserStore } from '@main/stores/user'
 import { useAddressStore } from '@main/stores/address'
 import { useConversationStore } from '@main/stores/conversation'
+import { useReviewStore } from '@main/stores/review'
+import { useComposeStore } from '@main/stores/compose'
+import { permissions as perms } from '@main/constants/permissions'
 import { useAddressNavigation } from '@main/composables/useAddressNavigation'
 import { Button } from '@shared-ui/components/ui/button'
 import { navIconMap } from '@main/constants/navIcons'
@@ -39,6 +42,8 @@ import FernmailLogo from '@main/components/brand/FernmailLogo.vue'
 const userStore = useUserStore()
 const addressStore = useAddressStore()
 const conversationStore = useConversationStore()
+const reviewStore = useReviewStore()
+const composeStore = useComposeStore()
 const settingsStore = useAppSettingsStore()
 const route = useRoute()
 const router = useRouter()
@@ -47,7 +52,11 @@ const { navigateToAddress } = useAddressNavigation()
 
 const isActiveParent = (parentHref) => route.path.startsWith(parentHref)
 const isMailRoute = (path) =>
-  path.startsWith('/addresses') || path.startsWith('/search') || path.startsWith('/conversation')
+  path.startsWith('/addresses') ||
+  path.startsWith('/search') ||
+  path.startsWith('/conversation') ||
+  path.startsWith('/reviews')
+const canCompose = computed(() => userStore.can(perms.CONVERSATIONS_CREATE))
 const isActiveAddress = (addressID) => String(route.params.addressID) === String(addressID)
 const filteredAdminNavItems = computed(() => filterNavItems(adminNavItems, userStore.can))
 
@@ -73,6 +82,7 @@ const addressesOpen = useStorage('addressesSectionOpen', true)
 onMounted(() => {
   addressStore.fetchAddresses()
   conversationStore.fetchSidebarCounts({ force: true })
+  reviewStore.fetchCounts()
 })
 </script>
 
@@ -182,9 +192,39 @@ onMounted(() => {
               </div>
             </SidebarMenuItem>
           </SidebarMenu>
+          <Button
+            v-if="canCompose"
+            variant="default"
+            class="h-10 w-full justify-start bg-success px-3 text-success-foreground hover:bg-success/90 max-md:h-12"
+            @click="composeStore.open()"
+          >
+            <SquarePen class="h-4 w-4" aria-hidden="true" />
+            {{ t('compose.button') }}
+          </Button>
         </SidebarHeader>
 
         <SidebarContent>
+          <SidebarGroup v-if="reviewStore.enabled" class="pb-0">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  :isActive="route.path.startsWith('/reviews')"
+                  class="!h-auto min-h-10 px-2.5 py-2 max-md:min-h-12"
+                  asChild
+                >
+                  <router-link :to="{ name: 'reviews' }">
+                    <ShieldCheck class="h-4 w-4 text-review" aria-hidden="true" />
+                    <span class="flex-1 truncate text-base font-medium max-md:text-lg">{{ t('review.title') }}</span>
+                    <SidebarCountBadge
+                      tone="review"
+                      :count="reviewStore.badgeCount"
+                      :ariaLabel="t('review.badgeLabel', { count: reviewStore.badgeCount })"
+                    />
+                  </router-link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
           <SidebarGroup>
             <Collapsible class="group/collapsible" v-model:open="addressesOpen">
               <SidebarMenu>

@@ -199,6 +199,11 @@
     --warning-foreground: 24 45% 2%;
     --warning-600: 35 92% 33%;
 
+    /* Review queue: emails waiting for an Admin or Agent to approve. */
+    --review: 214 84% 46%;
+    --review-foreground: 0 0% 100%;
+    --review-soft: 214 90% 96%;
+
     --link: 210 100% 40%;
 
     --border: 0 0% 91%;
@@ -241,6 +246,10 @@
     --warning: 36 87% 62%;
     --warning-foreground: 24 45% 2%;
     --warning-600: 36 87% 62%;
+
+    --review: 213 90% 64%;
+    --review-foreground: 220 40% 8%;
+    --review-soft: 215 40% 16%;
 
     --link: 210 90% 66%;
 

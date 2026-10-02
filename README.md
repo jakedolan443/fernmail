@@ -2,7 +2,9 @@
 
 Fernmail is a self-hosted, address-first shared email application derived from LibreDesk. It keeps email receiving and replies, threading, attachments, rich replies, drafts, search, statuses, snoozing, private notes and mentions.
 
-The workspace is deliberately reply-only: agents cannot start an outbound conversation with an address that has not written first. There is no global “All mail” page and no saved Views. The sidebar lists the email addresses an agent may access, with green badges showing unread messages that need attention.
+There is no global “All mail” page and no saved Views. The sidebar lists the email addresses a person may access, with green badges showing unread messages that need attention. **Compose New** starts an email from any of those addresses.
+
+People have one of three roles. **Admins** manage settings and people and can use every address. **Agents** read and send from the addresses they are given. **Contributors** read their addresses, but their replies and new emails wait in the **Review** queue until an Admin or Agent approves them; a blue badge shows how many are waiting. Roles and addresses are set per person in **Admin → Workspace → Users**.
 
 Email runs over IMAP and SMTP, including Google/Microsoft OAuth. This is a conversation-based shared mailbox, not a full bidirectional IMAP folder client.
 
@@ -59,6 +61,6 @@ The backend is written in Go and the frontend is Vue.js 3 with Shadcn UI.
 
 An **Address** is the email identity agents see, receive mail at and reply from. A physical mailbox address owns one IMAP/SMTP transport; an alias shares that transport safely. Configure aliases, display names and access in **Admin → Channel → Addresses**. A primary mailbox address is created automatically when its transport is connected.
 
-Address access can be open to all agents or restricted to selected agents and teams. Administrators retain recovery access. An address with historical conversations cannot be renamed, moved or deleted; disable it instead so existing replies retain the correct From identity.
+Admins can use every address. Everyone else needs access to an address, given to them in **Admin → Workspace → Users** or through a team; there are no addresses open to everyone. An address with historical conversations cannot be renamed, moved or deleted; disable it instead so existing replies retain the correct From identity.
 
 Access restrictions apply on the server to conversation reads and replies, lists, search, drafts, counts, attachments and live message notifications. Upgrade existing databases before starting this build (`--upgrade`); fresh installations include the address schema automatically.

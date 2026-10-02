@@ -43,7 +43,8 @@ func TestDraftMediaOwnershipRetentionAndCanonicalMetadata(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	db.MustExec(`INSERT INTO inboxes(name,channel,"from") VALUES('Mail','email','mail@test'); INSERT INTO email_addresses(inbox_id,address,kind,restricted) SELECT id,'mail@test','mailbox',false FROM inboxes`)
+	db.MustExec(`INSERT INTO inboxes(name,channel,"from") VALUES('Mail','email','mail@test'); INSERT INTO email_addresses(inbox_id,address,kind) SELECT id,'mail@test','mailbox' FROM inboxes;
+		INSERT INTO email_address_users(address_id,user_id) SELECT a.id,u.id FROM email_addresses a CROSS JOIN users u WHERE u.type='agent'`)
 	if err := db.Get(&conversation, `INSERT INTO conversations(contact_id,inbox_id,address_id,status_id) SELECT $1,a.inbox_id,a.id,s.id FROM email_addresses a CROSS JOIN conversation_statuses s WHERE s.name='Open' RETURNING id`, owner); err != nil {
 		t.Fatal(err)
 	}

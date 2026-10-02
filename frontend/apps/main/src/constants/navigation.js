@@ -9,6 +9,12 @@ export const adminNavItems = [
         icon: 'Settings'
       },
       {
+        titleKey: 'users.title',
+        href: '/admin/users',
+        permission: 'users:manage',
+        icon: 'UsersRound'
+      },
+      {
         titleKey: 'admin.systemResources.title',
         href: '/admin/resources',
         permission: 'general_settings:manage',

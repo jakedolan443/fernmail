@@ -33,10 +33,10 @@ func TestUnreadAddressCountsOnlyIncludeAccessibleAddresses(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := db.Get(&directorAddress, `INSERT INTO email_addresses(inbox_id,address,kind,restricted) VALUES($1,'director@example.test','mailbox',true) RETURNING id`, directorInbox); err != nil {
+	if err := db.Get(&directorAddress, `INSERT INTO email_addresses(inbox_id,address,kind) VALUES($1,'director@example.test','mailbox') RETURNING id`, directorInbox); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Get(&supportAddress, `INSERT INTO email_addresses(inbox_id,address,kind,restricted) VALUES($1,'support@example.test','mailbox',true) RETURNING id`, supportInbox); err != nil {
+	if err := db.Get(&supportAddress, `INSERT INTO email_addresses(inbox_id,address,kind) VALUES($1,'support@example.test','mailbox') RETURNING id`, supportInbox); err != nil {
 		t.Fatal(err)
 	}
 	db.MustExec(`INSERT INTO email_address_users(address_id,user_id) VALUES($1,$2)`, directorAddress, reader)

@@ -53,7 +53,7 @@ func TestAddressAccessAcrossMailSurfaces(t *testing.T) {
 	}
 	if _, err := addresses.Update(billing.ID, address.Address{
 		InboxID: billingInbox, Address: billing.Address, Kind: address.KindMailbox,
-		Enabled: true, Restricted: true, UserIDs: []int{viewer},
+		Enabled: true, UserIDs: []int{viewer},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestAddressAccessAcrossMailSurfaces(t *testing.T) {
 
 	if _, err := addresses.Update(support.ID, address.Address{
 		InboxID: supportInbox, Address: support.Address, Kind: address.KindMailbox,
-		Enabled: true, Restricted: true, UserIDs: []int{viewer},
+		Enabled: true, UserIDs: []int{viewer},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestAddressAccessAcrossMailSurfaces(t *testing.T) {
 
 	if _, err := addresses.Update(billing.ID, address.Address{
 		InboxID: billingInbox, Address: billing.Address, Kind: address.KindMailbox,
-		Enabled: true, Restricted: true,
+		Enabled: true, UserIDs: []int{},
 	}); err != nil {
 		t.Fatal(err)
 	}

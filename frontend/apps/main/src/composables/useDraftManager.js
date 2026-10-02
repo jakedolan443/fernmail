@@ -166,6 +166,14 @@ export function useDraftManager(
     }
   }
 
+  // Re-read the open draft from the store, e.g. after a review returns a reply to it.
+  function reloadDraft() {
+    const uuid = conversationUUID.value
+    if (!uuid || loadedKey.value !== currentKey()) return
+    applyDraft(store.getDraft(uuid, messageType.value))
+    prefillRecipients()
+  }
+
   function captureDraft() {
     const snapshot = {
       uuid: conversationUUID.value,
@@ -201,6 +209,7 @@ export function useDraftManager(
     loadedAttachments,
     recipients,
     clearDraft,
+    reloadDraft,
     captureDraft,
     completeSend,
     saveState,

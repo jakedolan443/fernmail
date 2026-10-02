@@ -126,7 +126,8 @@ func (m *Manager) LinkMessageMediaTx(tx *sqlx.Tx, messageID int, media []models.
 }
 
 // deletePendingMessageMedia keeps the row lock through blob deletion, so a draft
-// save or send either establishes its reference first or sees the file as gone.
+// save, review submission or send either establishes its reference first or sees
+// the file as gone.
 func (m *Manager) deletePendingMessageMedia(id int) error {
 	tx, err := m.db.Beginx()
 	if err != nil {
@@ -145,6 +146,7 @@ func (m *Manager) deletePendingMessageMedia(id int) error {
 	err = tx.Get(&eligible, `SELECT
   (model_type='messages' OR model_type IS NULL)
   AND NOT EXISTS (SELECT 1 FROM conversation_draft_media dm WHERE dm.media_id=media.id)
+  AND NOT EXISTS (SELECT 1 FROM outbound_review_media rm WHERE rm.media_id=media.id)
   AND ((COALESCE(model_id,0)=0 AND created_at < NOW()-INTERVAL '7 days')
     OR (model_id>0 AND created_at < NOW()-INTERVAL '24 hours' AND NOT EXISTS (SELECT 1 FROM conversation_messages cm WHERE cm.id=media.model_id)))
   FROM media WHERE id=$1`, id)

@@ -36,9 +36,10 @@ func TestMarkAddressReadHTTPAndPersonalBroadcast(t *testing.T) {
 	}
 	db.MustExec(`INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE name='Agent'`, reader)
 	db.MustExec(`INSERT INTO inboxes(name,channel) VALUES('Mailbox','email')`)
-	if err := db.Get(&addressID, `INSERT INTO email_addresses(inbox_id,address,restricted) SELECT id,'mail@example.test',false FROM inboxes RETURNING id`); err != nil {
+	if err := db.Get(&addressID, `INSERT INTO email_addresses(inbox_id,address) SELECT id,'mail@example.test' FROM inboxes RETURNING id`); err != nil {
 		t.Fatal(err)
 	}
+	db.MustExec(`INSERT INTO email_address_users(address_id,user_id) VALUES($1,$2)`, addressID, reader)
 	self := &ws.Client{ID: reader, Hub: hub, Send: make(chan wsmodels.WSMessage, 8)}
 	teammate := &ws.Client{ID: reader + 1, Hub: hub, Send: make(chan wsmodels.WSMessage, 8)}
 	hub.AddClient(self)
@@ -83,7 +84,7 @@ func TestMarkAddressReadHTTPAndPersonalBroadcast(t *testing.T) {
 			t.Fatalf("id=%q status=%d", id, got)
 		}
 	}
-	db.MustExec(`UPDATE email_addresses SET restricted=true WHERE id=$1`, addressID)
+	db.MustExec(`DELETE FROM email_address_users WHERE address_id=$1`, addressID)
 	if got := request(fmt.Sprint(addressID)).Response.StatusCode(); got != 403 {
 		t.Fatalf("denied address status=%d", got)
 	}

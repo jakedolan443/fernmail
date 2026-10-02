@@ -13,6 +13,7 @@
   </div>
 
   <Command />
+  <ComposeDialog />
 </template>
 
 <script setup>
@@ -35,6 +36,7 @@ import AdminBanner from '@/components/banner/AdminBanner.vue'
 import ConnectionBanner from '@/components/banner/ConnectionBanner.vue'
 import Sidebar from '@main/components/sidebar/Sidebar.vue'
 import Command from '@/features/command/CommandBox.vue'
+import ComposeDialog from '@/features/compose/ComposeDialog.vue'
 
 const route = useRoute()
 const emitter = useEmitter()

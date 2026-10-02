@@ -131,6 +131,8 @@
       :handleSend="handleSend"
       :handleSendAndSetStatus="handleSendAndSetStatus"
       :showGenerateReply="messageType !== 'private_note'"
+      :sendForReview="sendForReview && messageType === 'reply'"
+      :allowSetStatus="allowSetStatus"
       @emojiSelect="handleEmojiSelect"
       @generateReply="$emit('generateReply')"
     />
@@ -259,7 +261,9 @@ const props = defineProps({
   canSendPrivateNote: {
     type: Boolean,
     required: true
-  }
+  },
+  sendForReview: { type: Boolean, default: false },
+  allowSetStatus: { type: Boolean, default: true }
 })
 
 const emit = defineEmits([

@@ -2,7 +2,7 @@
 
 The UI, HTTP routes and background workers for contacts/CRM, ticket assignment and priorities, automations, macros, SLA/business-hours tracking, CSAT, reports, activity logs, custom attributes, context links, public help centers, chat widgets and AI have been removed.
 
-Retained: email inbox connections and OAuth, reply with CC/BCC, attachments and image controls, drafts, threading, transcripts, search, read state, custom statuses and snoozing, internal notes and mentions, account authentication, SSO, mailbox configuration, APIs and webhooks for the retained features. Fernmail is reply-only: agents cannot create a new outbound conversation.
+Retained: email inbox connections and OAuth, reply with CC/BCC, attachments and image controls, drafts, threading, transcripts, search, read state, custom statuses and snoozing, internal notes and mentions, account authentication, SSO, mailbox configuration, APIs and webhooks for the retained features. Since v3.7.0, Compose New starts a new conversation from an address; see below.
 
 ## Existing installations
 
@@ -55,3 +55,14 @@ CYPRESS_BASE_URL=http://localhost:9000 CYPRESS_SYSTEM_PASSWORD='your-test-passwo
 ```
 
 The regressions exercise real PostgreSQL permission boundaries, migrations, concurrent ingestion/delivery claims, draft attachment ownership and retention, mailbox recovery with an in-process IMAP server, and browser state during send/navigation, reconnect, and failed draft saves.
+
+## Contributors, review queue and Compose New (v3.7.0)
+
+Back up the database and run `./fernmail --config config.toml --upgrade` before starting the new version.
+
+- **Contributor role.** Contributors read the addresses they are given. Their replies and new emails wait in the Review queue until an Admin or Agent who can use the address approves them. A denied reply returns to its author's reply box as a draft, with the reviewer's reason. Admins and Agents gain the `reviews:manage` and `conversations:create` permissions.
+- **Open addresses are retired.** Admins can use every address; everyone else needs a direct or team grant. To keep today's access, the upgrade gives every enabled non-admin agent an explicit grant to each address that was open to everyone. Review these in **Admin → Workspace → Users** afterwards.
+- **Users.** One screen lists everyone, with their role, addresses and whether they can sign in. It also adds and deletes people. The last enabled Admin cannot be demoted, disabled or deleted, and nobody can change their own role. Per-person access has moved here from the address form, which keeps team grants.
+- **Compose New** sends a new email from a chosen address. Admins and Agents send directly; a Contributor's email goes to review first.
+
+See [contributor-review.md](contributor-review.md) for the full design.

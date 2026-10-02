@@ -28,6 +28,7 @@ import (
 	"github.com/jakedolan443/fernmail/internal/stringutil"
 	umodels "github.com/jakedolan443/fernmail/internal/user/models"
 	wmodels "github.com/jakedolan443/fernmail/internal/webhook/models"
+	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	"github.com/volatiletech/null/v9"
 )
@@ -565,6 +566,12 @@ func (m *Manager) CreateContactMessage(media []mmodels.Media, contactID int, con
 
 // QueueReply queues a reply message in a conversation.
 func (m *Manager) QueueReply(media []mmodels.Media, inboxID, senderID, contactID int, conversationUUID, content string, to, cc, bcc []string, metaMap map[string]interface{}) (models.Message, error) {
+	return m.queueReply(media, inboxID, senderID, contactID, conversationUUID, content, to, cc, bcc, metaMap, nil)
+}
+
+// queueReply queues an outgoing reply. beforeCommit runs inside the insert
+// transaction, so a caller's own bookkeeping commits or rolls back with the message.
+func (m *Manager) queueReply(media []mmodels.Media, inboxID, senderID, contactID int, conversationUUID, content string, to, cc, bcc []string, metaMap map[string]interface{}, beforeCommit func(*sqlx.Tx, *models.Message) error) (models.Message, error) {
 	var (
 		message = models.Message{}
 	)
@@ -640,7 +647,7 @@ func (m *Manager) QueueReply(media []mmodels.Media, inboxID, senderID, contactID
 		MessageReceiverID: contactID,
 		Meta:              metaJSON,
 	}
-	if err := m.InsertMessage(&message); err != nil {
+	if err := m.insertMessage(context.Background(), &message, beforeCommit); err != nil {
 		return models.Message{}, err
 	}
 	return message, nil
@@ -648,10 +655,10 @@ func (m *Manager) QueueReply(media []mmodels.Media, inboxID, senderID, contactID
 
 // InsertMessage inserts a message and attaches the media to the message.
 func (m *Manager) InsertMessage(message *models.Message) error {
-	return m.insertMessage(context.Background(), message)
+	return m.insertMessage(context.Background(), message, nil)
 }
 
-func (m *Manager) insertMessage(ctx context.Context, message *models.Message) error {
+func (m *Manager) insertMessage(ctx context.Context, message *models.Message, beforeCommit func(*sqlx.Tx, *models.Message) error) error {
 	if message.Private {
 		message.Status = models.MessageStatusSent
 	}
@@ -716,6 +723,12 @@ func (m *Manager) insertMessage(ctx context.Context, message *models.Message) er
 			return err
 		}
 		return envelope.NewError(envelope.GeneralError, m.i18n.T("globals.messages.somethingWentWrong"), nil)
+	}
+
+	if beforeCommit != nil {
+		if err := beforeCommit(tx, message); err != nil {
+			return err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -935,7 +948,7 @@ func (m *Manager) processIncomingMessage(ctx context.Context, in models.Incoming
 	}
 
 	// Insert message. On failure, delete the conversation if it was just created for this message.
-	if err = m.insertMessage(ctx, &msg); err != nil {
+	if err = m.insertMessage(ctx, &msg, nil); err != nil {
 		m.lo.Error("error inserting incoming message", "message_source_id", in.SourceID.String, "conversation_uuid", conversationUUID, "is_new", isNewConversation, "error", err)
 		if isNewConversation && conversationUUID != "" {
 			if delErr := m.DeleteConversation(conversationUUID); delErr != nil {

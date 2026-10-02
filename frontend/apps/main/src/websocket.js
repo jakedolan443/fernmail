@@ -9,6 +9,7 @@ import { useEmitter } from './composables/useEmitter'
 import { getI18n } from './i18n'
 import { useBrowserNotificationsStore } from './stores/browserNotifications'
 import { useUserStore } from './stores/user'
+import { useReviewStore } from './stores/review'
 
 export class WebSocketClient {
   constructor() {
@@ -28,6 +29,7 @@ export class WebSocketClient {
 
     this.usersStore = useUsersStore()
     this.userStore = useUserStore()
+    this.reviewStore = useReviewStore()
     this.connectionStore = useConnectionStore()
     this.emitter = useEmitter()
     this.messageQueue = []
@@ -71,6 +73,7 @@ export class WebSocketClient {
     this.flushMessageQueue()
     if (wasReconnect) {
       this.convStore.resyncMail()
+      this.reviewStore.fetchCounts()
       // RESUB!
       const uuids = this.convStore.conversations.data?.map((c) => c.uuid) || []
       this.subscribeListReplace(uuids)
@@ -150,6 +153,8 @@ export class WebSocketClient {
 
         [WS_EVENT.AGENT_AVAILABILITY_UPDATE]: () =>
           this.usersStore.setAvailability(data.data.agent_id, data.data.availability_status),
+        [WS_EVENT.REVIEW_CREATED]: () => this.reviewStore.handleLiveEvent(WS_EVENT.REVIEW_CREATED, data.data),
+        [WS_EVENT.REVIEW_UPDATED]: () => this.reviewStore.handleLiveEvent(WS_EVENT.REVIEW_UPDATED, data.data),
         [WS_EVENT.SYSTEM_TOAST]: () => {
           const message = data.data || {}
           const translated = message.message_key ? getI18n().global.t(message.message_key) : ''

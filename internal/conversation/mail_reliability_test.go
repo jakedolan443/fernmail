@@ -383,7 +383,7 @@ func TestCloseCancelsBlockedOutgoingProducer(t *testing.T) {
 
 func TestRetiredRestrictedAddressKeepsIncomingAndBlocksDispatch(t *testing.T) {
 	m, db, inboxID, _, b := mailTestManager(t)
-	db.MustExec(`UPDATE email_addresses SET enabled=false,restricted=true WHERE id=$1`, b)
+	db.MustExec(`UPDATE email_addresses SET enabled=false WHERE id=$1`, b)
 	received, err := m.ProcessIncomingMessage(testIncoming(inboxID, "b@example.test", "retired@test", ""))
 	if err != nil {
 		t.Fatal(err)

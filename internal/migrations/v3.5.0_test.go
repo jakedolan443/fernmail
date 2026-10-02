@@ -8,6 +8,7 @@ import (
 
 func TestAddressFirstUpgradePromotesAliasesAndRetiresViews(t *testing.T) {
 	db := testutil.NewDB(t, "address_first_upgrade")
+	restoreOpenAddressFlag(t, db)
 	db.MustExec(`
 		CREATE TYPE view_visibility AS ENUM ('all', 'team', 'user');
 		CREATE TABLE views (
@@ -70,6 +71,7 @@ func TestAddressFirstUpgradePromotesAliasesAndRetiresViews(t *testing.T) {
 
 func TestAddressFirstUpgradeCopiesLegacyRestrictedMailboxAccess(t *testing.T) {
 	db := testutil.NewDB(t, "address_first_inbox_access")
+	restoreOpenAddressFlag(t, db)
 	db.MustExec(`
 		INSERT INTO inboxes(name, channel, "from") VALUES ('Mail transport', 'email', 'support@example.test');
 		INSERT INTO users(type, email, first_name) VALUES ('agent', 'reader@example.test', 'Reader');
@@ -96,6 +98,7 @@ func TestAddressFirstUpgradeCopiesLegacyRestrictedMailboxAccess(t *testing.T) {
 
 func TestAddressUpgradeDoesNotPromoteDeniedViewMembers(t *testing.T) {
 	db := testutil.NewDB(t, "address_upgrade_denied_view")
+	restoreOpenAddressFlag(t, db)
 	db.MustExec(`
  CREATE TYPE view_visibility AS ENUM ('all','team','user');
  CREATE TABLE views(id SERIAL PRIMARY KEY,name TEXT,visibility view_visibility,user_id BIGINT,team_id INTEGER,filters JSONB);

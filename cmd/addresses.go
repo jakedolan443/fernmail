@@ -271,7 +271,7 @@ func provisionEmailAddresses(app *App, record imodels.Inbox, configured []imodel
 		}
 		created, err := app.address.Create(address.Address{
 			InboxID: record.ID, Address: candidate, DisplayName: displayName,
-			Kind: address.KindAlias, Enabled: alias.Enabled, Restricted: true,
+			Kind: address.KindAlias, Enabled: alias.Enabled,
 		})
 		if err != nil {
 			return err

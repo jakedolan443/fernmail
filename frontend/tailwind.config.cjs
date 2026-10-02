@@ -74,6 +74,11 @@ module.exports = {
           foreground: 'hsl(var(--warning-foreground))',
           600: 'hsl(var(--warning-600))'
         },
+        review: {
+          DEFAULT: 'hsl(var(--review))',
+          foreground: 'hsl(var(--review-foreground))',
+          soft: 'hsl(var(--review-soft))'
+        },
         link: 'hsl(var(--link))',
         muted: {
           DEFAULT: 'hsl(var(--muted))',
