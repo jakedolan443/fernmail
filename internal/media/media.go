@@ -188,6 +188,7 @@ func (m *Manager) GetStorageUsage() (StorageUsage, error) {
 
 // queries holds the prepared SQL statements.
 type queries struct {
+	GetUnlinkedBrandingMedia   *sqlx.Stmt `query:"get-unlinked-branding-media"`
 	GetUnlinkedResourceAvatars *sqlx.Stmt `query:"get-unlinked-resource-avatars"`
 	GetUnlinkedResourceImages  *sqlx.Stmt `query:"get-unlinked-resource-images"`
 	Insert                     *sqlx.Stmt `query:"insert-media"`
@@ -520,7 +521,7 @@ func (m *Manager) DeleteUnlinkedMedia(ctx context.Context) {
 
 // deleteUnlinked runs all unlinked-media sweeps.
 func (m *Manager) deleteUnlinked() {
-	for _, stmt := range []*sqlx.Stmt{m.queries.GetUnlinkedMessageMedia, m.queries.GetUnlinkedResourceImages, m.queries.GetUnlinkedResourceAvatars} {
+	for _, stmt := range []*sqlx.Stmt{m.queries.GetUnlinkedMessageMedia, m.queries.GetUnlinkedResourceImages, m.queries.GetUnlinkedResourceAvatars, m.queries.GetUnlinkedBrandingMedia} {
 		if err := m.deleteUnlinkedRows(stmt); err != nil {
 			m.lo.Error("error deleting unlinked media", "error", err)
 		}
@@ -547,8 +548,8 @@ func (m *Manager) deleteUnlinkedRows(stmt *sqlx.Stmt) error {
 			continue
 		}
 
-		// If it's an image, also delete the `thumb_uuid` image from store.
-		if stmt != m.queries.GetUnlinkedMessageMedia && mm.Model.String != models.ModelResourceImages && mm.Model.String != models.ModelResourceAvatars && strings.HasPrefix(mm.ContentType, "image/") {
+		// If it's an image, also delete the `thumb_uuid` image from store. Logos are stored without thumbnails.
+		if stmt != m.queries.GetUnlinkedMessageMedia && mm.Model.String != models.ModelResourceImages && mm.Model.String != models.ModelResourceAvatars && mm.Model.String != models.ModelBranding && strings.HasPrefix(mm.ContentType, "image/") {
 			thumbUUID := image.ThumbPrefix + mm.UUID
 			if err := m.Delete(thumbUUID); err != nil {
 				m.lo.Error("error deleting thumbnail for unlinked media", "media_id", mm.ID, "thumb_uuid", thumbUUID, "error", err)

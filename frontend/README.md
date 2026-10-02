@@ -39,6 +39,7 @@ a supported desktop browser, and an open Libredesk tab. They use live mailbox ev
 so they do not run after all Fernmail tabs are closed. Outgoing mail, internal notes,
 and activity updates do not generate notifications.
 
-The green favicon is the default; a custom favicon URL still takes precedence.
+The green favicon and the Fernmail title are the defaults. A site logo and site title
+set in Admin → General replace them in the top bar, the tab title and the favicon.
 The tab title prefixes the total unread message count, including mail outside the
 current address, and removes the prefix when no unread messages remain.

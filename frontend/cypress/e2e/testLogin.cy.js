@@ -7,7 +7,6 @@ describe('Login Component', () => {
             statusCode: 200,
             body: {
                 data: {
-                    "app.favicon_url": "http://localhost:9000/favicon.ico",
                     "app.lang": "en",
                     "app.logo_url": "http://localhost:9000/logo.png",
                     "app.site_name": "libredesk",

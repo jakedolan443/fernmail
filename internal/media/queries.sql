@@ -97,3 +97,15 @@ SELECT id, created_at, updated_at, "uuid", store, filename, content_type, conten
 FROM media
 WHERE model_type = 'resource_avatars'
  AND NOT EXISTS (SELECT 1 FROM users WHERE users.id = media.model_id);
+
+-- name: get-unlinked-branding-media
+-- Logos that were replaced, removed, or uploaded but never saved. The grace
+-- period keeps an upload alive while the admin is still on the settings form.
+SELECT id, created_at, updated_at, "uuid", store, filename, content_type, content_id, model_id, model_type, disposition, "size", meta, private, uploaded_by
+FROM media
+WHERE model_type = 'branding'
+ AND created_at < NOW() - INTERVAL '24 hours'
+ AND NOT EXISTS (
+   SELECT 1 FROM settings s
+   WHERE s.key = 'app.logo_url' AND (s.value #>> '{}') LIKE '%/uploads/' || media.uuid::text
+ );

@@ -28,7 +28,7 @@ module.exports = {
     },
     extend: {
       fontFamily: {
-        sans: ['Geist', ...defaultTheme.fontFamily.sans]
+        sans: ['Go', ...defaultTheme.fontFamily.sans]
       },
       height: {
         screen: '100dvh'

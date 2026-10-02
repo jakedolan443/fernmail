@@ -9,7 +9,7 @@
       <CardContent class="p-6 space-y-5">
         <div class="space-y-1 text-center">
           <CardTitle class="text-2xl font-bold text-foreground">
-            <FernmailLogo :name="appSettingsStore.public_config?.['app.site_name'] || 'Fernmail'" />
+            <BrandLogo :name="appSettingsStore.siteTitle" :logo="appSettingsStore.siteLogo" />
           </CardTitle>
           <p class="text-sm text-muted-foreground">{{ t('auth.signIn') }}</p>
         </div>
@@ -112,7 +112,7 @@
 </template>
 
 <script setup>
-import FernmailLogo from '@main/components/brand/FernmailLogo.vue'
+import BrandLogo from '@main/components/brand/BrandLogo.vue'
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { handleHTTPError } from '@shared-ui/utils/http.js'

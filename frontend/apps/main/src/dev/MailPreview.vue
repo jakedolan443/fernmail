@@ -5,7 +5,7 @@
         class="flex flex-wrap items-center justify-between gap-3 border-b bg-background px-5 py-3"
       >
         <div class="flex items-center gap-3">
-          <FernmailLogo />
+          <BrandLogo />
           <span class="rounded-md bg-success/10 px-2 py-1 text-xs font-medium text-success"
             >Mock mailbox</span
           >
@@ -98,7 +98,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import FernmailLogo from '@main/components/brand/FernmailLogo.vue'
+import BrandLogo from '@main/components/brand/BrandLogo.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Bell, Mail, MailPlus } from 'lucide-vue-next'
 import { Button } from '@shared-ui/components/ui/button'

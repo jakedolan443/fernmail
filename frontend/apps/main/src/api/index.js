@@ -220,6 +220,12 @@ const uploadMedia = (data) =>
       'Content-Type': 'multipart/form-data'
     }
   })
+const uploadSiteLogo = (data) =>
+  http.post('/api/v1/settings/general/logo', data, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
 
 const getLanguage = (lang) => http.get(`/api/v1/lang/${lang}`)
 const getAvailableLanguages = () => http.get('/api/v1/lang')
@@ -350,6 +356,7 @@ export default {
   updateConversationStatus,
 
   uploadMedia,
+  uploadSiteLogo,
   updateAssigneeLastSeen,
   markConversationAsUnread,
   updateUser,

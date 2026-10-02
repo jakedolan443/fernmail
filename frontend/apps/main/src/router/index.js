@@ -197,7 +197,7 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   if (to.fullPath !== from.fullPath) abortRouteScope()
   const appSettingsStore = useAppSettingsStore()
-  const siteName = appSettingsStore.settings?.['app.site_name'] || 'Fernmail'
+  const siteName = appSettingsStore.siteTitle
   const i18n = getI18n()
   const titleKey = to.meta?.titleKey
   const pageTitle = titleKey && i18n ? i18n.global.t(titleKey, to.meta?.titleCount || 1) : ''

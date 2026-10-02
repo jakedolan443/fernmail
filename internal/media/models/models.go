@@ -13,6 +13,8 @@ const (
 	ModelResourceImages  = "resource_images"
 	ModelMessages        = "messages"
 	ModelUser            = "users"
+	// ModelBranding is the public site logo referenced by the app.logo_url setting.
+	ModelBranding = "branding"
 
 	DispositionInline = "inline"
 )

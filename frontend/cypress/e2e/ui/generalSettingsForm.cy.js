@@ -2,13 +2,14 @@ describe('General settings form', () => {
   const stamp = Date.now()
   const siteName = `Cypress Desk ${stamp}`
   const path = '/admin/general'
+  const onePixelPNG =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
 
   // The PUT replaces the whole record, so the restore has to send every key.
   const generalKeys = [
     'app.site_name',
     'app.lang',
     'app.max_file_upload_size',
-    'app.favicon_url',
     'app.logo_url',
     'app.root_url',
     'app.allowed_file_upload_extensions',
@@ -49,7 +50,6 @@ describe('General settings form', () => {
 
     cy.get('input[name="site_name"]').should('have.value', original['app.site_name'])
     cy.get('input[name="root_url"]').should('have.value', original['app.root_url'])
-    cy.get('input[name="favicon_url"]').should('have.value', original['app.favicon_url'])
     cy.get('select[name="timezone"]').should('have.value', original['app.timezone'])
   })
 
@@ -104,14 +104,44 @@ describe('General settings form', () => {
     cy.get('@saveGeneral.all').should('have.length', 0)
   })
 
-  it('rejects an empty site name', () => {
+  it('saves a blank site name as the Fernmail default', () => {
     cy.intercept('PUT', '**/api/v1/settings/general').as('saveGeneral')
 
     cy.visit(path)
-    cy.get('input[name="site_name"]').should('not.have.value', '').clear()
+    cy.get('input[name="site_name"]').clear()
+    cy.get('input[name="site_name"]').should('have.attr', 'placeholder', 'Fernmail')
     cy.get('input[name="site_name"]').closest('form').find('button[type="submit"]').click()
 
-    cy.contains('Site name should be at least 1 character').should('exist')
-    cy.get('@saveGeneral.all').should('have.length', 0)
+    cy.wait('@saveGeneral').its('response.statusCode').should('eq', 200)
+    cy.visit(path)
+    cy.title().should('match', / - Fernmail$/)
+  })
+
+  it('uploads a site logo that becomes the favicon', () => {
+    cy.intercept('POST', '**/api/v1/settings/general/logo').as('uploadLogo')
+    cy.intercept('PUT', '**/api/v1/settings/general').as('saveGeneral')
+
+    cy.visit(path)
+    cy.get('input[type="file"][accept^="image/png"]').selectFile(
+      { contents: Cypress.Buffer.from(onePixelPNG, 'base64'), fileName: 'logo.png', mimeType: 'image/png' },
+      { force: true }
+    )
+    cy.wait('@uploadLogo').its('response.body.data.url').should('match', /^\/uploads\/[0-9a-f-]{36}$/)
+    cy.get('input[name="site_name"]').closest('form').find('button[type="submit"]').click()
+    cy.wait('@saveGeneral').its('response.statusCode').should('eq', 200)
+
+    cy.api('GET', '/api/v1/settings/general').then(({ body }) => {
+      expect(body.data['app.logo_url']).to.match(/^\/uploads\/[0-9a-f-]{36}$/)
+      cy.get('link#app-favicon').should('have.attr', 'href', body.data['app.logo_url'])
+    })
+  })
+
+  it('rejects an SVG site logo', () => {
+    cy.visit(path)
+    cy.get('input[type="file"][accept^="image/png"]').selectFile(
+      { contents: Cypress.Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'), fileName: 'logo.svg' },
+      { force: true }
+    )
+    cy.contains('The logo must be a PNG, JPG, WebP or ICO image').should('exist')
   })
 })

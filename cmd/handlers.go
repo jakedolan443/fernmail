@@ -44,6 +44,7 @@ func initHandlers(g *fastglue.Fastglue, hub *ws.Hub) {
 	g.GET("/api/v1/settings/resource-policy", auth(handleGetResourcePolicy))
 	g.PUT("/api/v1/settings/resource-policy", perm(handleUpdateResourcePolicy, "general_settings:manage"))
 	g.PUT("/api/v1/settings/general", perm(handleUpdateGeneralSettings, "general_settings:manage"))
+	g.POST("/api/v1/settings/general/logo", perm(handleUploadSiteLogo, "general_settings:manage"))
 	g.GET("/api/v1/system/resource-usage", perm(handleGetResourceUsage, "general_settings:manage"))
 	g.GET("/api/v1/system/resource-limits", perm(handleGetResourceLimits, "general_settings:manage"))
 	g.PUT("/api/v1/system/resource-limits", perm(handleUpdateResourceLimits, "general_settings:manage"))

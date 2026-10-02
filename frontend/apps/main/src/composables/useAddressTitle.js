@@ -16,7 +16,7 @@ export function useAddressTitle() {
     const address = addresses.get(route.params?.addressID)
     const titleKey = route.meta?.titleKey
     const page = address?.address || (titleKey ? t(titleKey, route.meta?.titleCount || 1) : 'Addresses')
-    const site = settings.settings['app.site_name'] || 'Fernmail'
+    const site = settings.siteTitle
     const count = conversations.sidebarCounts.unread
     document.title = `${count > 0 ? `(${count}) ` : ''}${page} - ${site}`
   }
@@ -26,7 +26,7 @@ export function useAddressTitle() {
       () => route.fullPath,
       () => addresses.addresses,
       () => route.meta,
-      () => settings.settings['app.site_name'],
+      () => settings.siteTitle,
       () => conversations.sidebarCounts.unread,
       locale
     ],

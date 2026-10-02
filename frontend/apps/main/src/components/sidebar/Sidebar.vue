@@ -37,7 +37,7 @@ import { addressLabel } from '@main/utils/address-display'
 import MobileDrawerFooter from './MobileDrawerFooter.vue'
 import MobileSidebarSwipeArea from './MobileSidebarSwipeArea.vue'
 import SidebarCountBadge from './SidebarCountBadge.vue'
-import FernmailLogo from '@main/components/brand/FernmailLogo.vue'
+import BrandLogo from '@main/components/brand/BrandLogo.vue'
 
 const userStore = useUserStore()
 const addressStore = useAddressStore()
@@ -179,8 +179,8 @@ onMounted(() => {
           <SidebarMenu>
             <SidebarMenuItem>
               <div class="flex w-full items-center justify-between px-1">
-                <div class="text-xl font-semibold">
-                  <FernmailLogo :name="settingsStore.settings['app.site_name'] || 'Fernmail'" />
+                <div class="min-w-0 text-xl font-semibold">
+                  <BrandLogo :name="settingsStore.siteTitle" :logo="settingsStore.siteLogo" />
                 </div>
                 <router-link :to="{ name: 'search' }" class="mr-1 mt-1 transition-colors">
                   <Search

@@ -8,6 +8,7 @@ import (
 
 func TestFernmailBrandingPreservesCustomSettings(t *testing.T) {
 	db := testutil.NewDB(t, "fernmail_branding")
+	restoreFaviconSetting(t, db, "/favicon.svg")
 	for _, tc := range []struct{ name, icon, wantName, wantIcon string }{
 		{"libredesk", "http://localhost:9000/favicon.ico", "Fernmail", "/favicon.svg"},
 		{"LibreDesk", "/favicon.ico", "Fernmail", "/favicon.svg"},

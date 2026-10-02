@@ -68,10 +68,18 @@ import (
 	"github.com/zerodha/logf"
 )
 
+// Branding used when the site title or logo is unset.
+const (
+	defaultSiteName   = "Fernmail"
+	defaultFaviconURL = "/favicon.svg"
+)
+
 // constants holds the app constants.
 type constants struct {
-	AppBaseURL                  string
-	FaviconURL                  string
+	AppBaseURL string
+	// FaviconURL is the site logo, or the bundled favicon when no logo is set.
+	FaviconURL string
+	// LogoURL is absolute so it also resolves in emails; empty when unset.
 	LogoURL                     string
 	SiteName                    string
 	UploadProvider              string
@@ -148,15 +156,25 @@ func initFlags() {
 
 // initConstants initializes the app constants.
 func initConstants() *constants {
+	rootURL := ko.String("app.root_url")
+	logoURL := absoluteAppURL(rootURL, strings.TrimSpace(ko.String("app.logo_url")))
 	return &constants{
-		AppBaseURL:                  ko.String("app.root_url"),
-		FaviconURL:                  ko.String("app.favicon_url"),
-		LogoURL:                     ko.String("app.logo_url"),
-		SiteName:                    ko.String("app.site_name"),
+		AppBaseURL:                  rootURL,
+		FaviconURL:                  cmp.Or(logoURL, defaultFaviconURL),
+		LogoURL:                     logoURL,
+		SiteName:                    cmp.Or(strings.TrimSpace(ko.String("app.site_name")), defaultSiteName),
 		UploadProvider:              ko.MustString("upload.provider"),
 		AllowedUploadFileExtensions: ko.Strings("app.allowed_file_upload_extensions"),
 		MaxFileUploadSizeMB:         ko.Int("app.max_file_upload_size"),
 	}
+}
+
+// absoluteAppURL prefixes an app-relative path, such as an uploaded logo, with the root URL.
+func absoluteAppURL(rootURL, u string) string {
+	if strings.HasPrefix(u, "/") && !strings.HasPrefix(u, "//") {
+		return strings.TrimRight(rootURL, "/") + u
+	}
+	return u
 }
 
 // initFS initializes the stuffbin FileSystem. If staticDir is set, files from
@@ -239,8 +257,8 @@ func loadSettings(m *setting.Manager) {
 		log.Fatalf("error parsing settings from DB: %v", err)
 	}
 
-	// Setting keys are dot separated, eg: app.favicon_url. Unflatten them into
-	// nested maps {app: {favicon_url}}.
+	// Setting keys are dot separated, eg: app.logo_url. Unflatten them into
+	// nested maps {app: {logo_url}}.
 	var out map[string]any
 
 	if err := json.Unmarshal(j, &out); err != nil {
